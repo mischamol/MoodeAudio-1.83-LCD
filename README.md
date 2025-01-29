@@ -9,8 +9,9 @@ Alternatively use een systemd watcher on both currentsong.txt and spotmeta.txt a
 
 Remember to sudo chmod -R 777 lcd.
 
-# Example of systemd watcher configuration
-```sudo nano /etc/systemd/system/spotwatcher.service
+## Example of systemd watcher configuration for spotmeta.txt
+```
+sudo nano /etc/systemd/system/spotwatcher.service
 
 [Unit]
 Description = Run LCD_updater.py on spotmeta change
@@ -32,7 +33,10 @@ WantedBy=multi-user.target
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now spotwatcher.path
+```
 
+## Example of optional systemd watcher for currentsong.txt
+```
 sudo nano /etc/systemd/system/currentsong.service
 
 [Unit]
@@ -54,3 +58,5 @@ WantedBy=multi-user.target
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now currentsong.path
+
+```
