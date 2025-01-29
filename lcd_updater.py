@@ -18,7 +18,7 @@ DC = 25
 BL = 18
 bus = 0 
 device = 0 
-#logging.basicConfig(level = logging.DEBUG)
+logging.basicConfig(level = logging.WARNING)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))  # set working dir
 Font = ImageFont.truetype("lib/Font02.ttf", 18)
 
@@ -41,11 +41,11 @@ def getMetaData() -> tuple[str, str, str]:
             data[key] = value
         if data.get("file")=="Spotify Active": #spotify uses spotmeta.txt instead of currentsong.txt
             with open('/var/local/www/spotmeta.txt', 'r') as spotfile:
-                spotdata=spotfile.readline().split('~~~') #first line consists of artist,song, album and coverart
-            imageurl = next((item for item in spotdata if item.startswith("https://")), None).rstrip() 
-            #return list elemment that starts with https:// => element location changes sometimes
-            artist=spotdata[1]
+                spotdata=spotfile.readline().split('~~~')
             song=spotdata[0]
+            artist=spotdata[1]
+            imageurl = next((item for item in spotdata if item.startswith("https://")), None).rstrip() 
+            #return elemment that starts with https:// instead of using index (url index changes sometimes)
         else: #local file or radio stream
             coverurl=data.get("coverurl").replace('%2F', '/')
             if coverurl.startswith('/'):
@@ -60,7 +60,7 @@ try:
     disp = LCD_1inch83.LCD_1inch83(spi=SPI.SpiDev(bus, device),spi_freq=10000000,rst=RST,dc=DC,bl=BL)
     disp.Init()
     disp.clear()
-    disp.bl_DutyCycle(50) #set backlight brightness (examplescript: 50)
+    disp.bl_DutyCycle(50) #set backlight brightness 
     imageurl, song, artist =getMetaData()
     response = requests.get(imageurl)
     if response.status_code!=200: #if not ok
