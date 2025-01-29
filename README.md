@@ -1,13 +1,13 @@
 # MoodeAudio metadata on waveshare 1.83 inch LCD
-- Script for displaying MoodeAudio coverart on waveshare 1.83 inch lcd screen
-- Don't forget to enable SPI: sudo rasp-config => enable spi  and pip install RPi.GPIO
-- You can place this files under /var/local/www/commandw/ and enable the lcd updater in moodeaudio under 'configure' -> 'Periphals' or currentsong.txt
-- However, lcd_updater.py is replaced by a stub after every update, so keep a backup somewhere else
-- Also use een systemd watcher on spotmeta.txt to include spotify metadata
 
-Alternatively use een systemd watcher on both currentsong.txt and spotmeta.txt 
-and place the files in your home folder, as this folder is left untouched during update
-Remember to sudo chmod -R 777 lcd 
+Script for displaying MoodeAudio coverart on waveshare 1.83 inch lcd screen. Don't forget to enable SPI: sudo rasp-config => enable spi  and pip install RPi.GPiO. 
+
+You can place this files under /var/local/www/commandw/ and enable the lcd updater in moodeaudio under 'configure' -> 'Periphals. However, lcd_updater.py is replaced by a stub after every update, so keep a backup somewhere els. Also use een systemd watcher on spotmeta.txt to include spotify metadata
+
+
+Alternatively use een systemd watcher on both currentsong.txt and spotmeta.txt and place the files in your home folder, as this folder is left untouched during update.
+
+Remember to sudo chmod -R 777 lcd.
 
 # Example of systemd watcher configuration
 ```sudo nano /etc/systemd/system/spotwatcher.service
