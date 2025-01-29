@@ -22,7 +22,7 @@ device = 0
 os.chdir(os.path.dirname(os.path.abspath(__file__)))  # set working dir
 Font = ImageFont.truetype("lib/Font02.ttf", 18)
 
-def roundImage(image, radius):
+def roundImage(image, radius) -> Image.Image:
     image = image.convert("RGBA")
     mask = Image.new("L", image.size, 0)
     draw = ImageDraw.Draw(mask)
