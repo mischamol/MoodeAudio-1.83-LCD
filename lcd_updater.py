@@ -1,7 +1,9 @@
 #!/usr/bin/python3
 #
-# Script for displaying MoodeAudio coverart on waveshare 1.83 inch lcd screen
-# part of this code including some of the included libraries come from the waveshare example files
+# Script for displaying MoodeAudio coverart on Waveshare 1.83 inch lcd screen
+# This script is based on the Waveshare example and uses the library files and fonts 
+# that were included with this example. For convenience these files are included in 
+# the  `bin` folder of this repo.
 
 import os
 import sys 
