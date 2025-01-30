@@ -1,11 +1,15 @@
 # MoodeAudio Metadata on Waveshare 1.83-inch LCD
 
-Script for displaying MoodeAudio cover art on a Waveshare 1.83-inch LCD screen.
+Script for displaying MoodeAudio cover art on a Waveshare 1.83-inch LCD screen. This script is based on the Waveshare example and uses the library files and fonts that were included with this example. For convenience these files are included in the  `bin` folder of this repo.
+
+https://www.waveshare.com/wiki/1.83inch_LCD_Module
 
 ## Prerequisites
+Connect the screen as covered in the abovementioned Waveshare wiki.
+
 Enable SPI: `sudo raspi-config` ➡ Go to Interface Options and enable SPI.
 
-Also, install the required library: `pip install RPi.GPIO`
+Install the required library: `pip install RPi.GPIO`
 
 ## Installation
 You can place `lcd_updater.py` and the `bin` folder under `/var/local/www/commandw/` and enable the LCD updater in MoodeAudio under ➡ Configure → Peripherals.
