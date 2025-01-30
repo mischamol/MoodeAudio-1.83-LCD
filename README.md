@@ -1,15 +1,23 @@
-# MoodeAudio metadata on waveshare 1.83 inch LCD
+# MoodeAudio Metadata on Waveshare 1.83-inch LCD
 
-Script for displaying MoodeAudio coverart on waveshare 1.83 inch lcd screen. Don't forget to enable SPI: sudo rasp-config => enable spi  and pip install RPi.GPiO. 
+Script for displaying MoodeAudio cover art on a Waveshare 1.83-inch LCD screen.
 
-You can place this files under /var/local/www/commandw/ and enable the lcd updater in moodeaudio under 'configure' -> 'Periphals. However, lcd_updater.py is replaced by a stub after every update, so keep a backup somewhere else. Also use een systemd watcher on spotmeta.txt to include spotify metadata
+## Prerequisites
+Enable SPI: `sudo raspi-config` ➡ Go to Interface Options and enable SPI.
 
+Also, install the required library: `pip install RPi.GPIO`
 
-Alternatively don't enable the lcd_updater in MoodeAudio, but instead use een systemd watcher on both currentsong.txt and spotmeta.txt and place this repo in your home folder, which is left untouched during update.
+## Installation
+You can place `lcd_updater.py` and the `bin` folder under `/var/local/www/commandw/` and enable the LCD updater in MoodeAudio under ➡ Configure → Peripherals.
 
-Remember to sudo chmod -R 777 lcd.
+⚠ Note: `lcd_updater.py` is replaced with a stub after every update, so keep a backup elsewhere. Additionally, use a systemd watcher on `spotmeta.txt` to include Spotify metadata.
 
-## Example of systemd watcher configuration for spotmeta.txt
+## Alternative Installation Method
+Instead of enabling the LCD updater in MoodeAudio, you can use a systemd watcher for both `currentsong.txt` and `spotmeta.txt`. As a result, you can place this repository wherever you want—for example, in your home folder, which remains untouched during updates.
+
+Ensure the correct permissions: `sudo chmod -R 777 lcd`
+
+## Example of systemd watcher configuration for `spotmeta.txt`
 ```
 sudo nano /etc/systemd/system/spotwatcher.service
 
@@ -35,7 +43,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now spotwatcher.path
 ```
 
-## Example of optional systemd watcher for currentsong.txt
+## Example of optional systemd watcher configuration for `currentsong.txt`
 ```
 sudo nano /etc/systemd/system/currentsong.service
 
