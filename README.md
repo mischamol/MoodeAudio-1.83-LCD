@@ -20,14 +20,14 @@ Install the required library: `pip install RPi.GPIO`
 ## Installation
 You can place `lcd_updater.py` and the `lib` folder under `/var/local/www/commandw/` and enable the LCD updater in MoodeAudio under ➡ Configure ➡ Peripherals. 
 
-Set the permissions: `sudo chmod 777 lcd_updater.py` and `sudo chmod -R 777 bin`
+Set the permissions: `sudo chmod 755 lcd_updater.py` and `sudo chmod -R 755 bin`
 
 ⚠ Note: `lcd_updater.py` is replaced with a stub after every update, so keep a backup elsewhere. Additionally, use a systemd watcher on `spotmeta.txt` to include Spotify metadata.
 
 ## Alternative Installation Method
 Instead of enabling the LCD updater in MoodeAudio, you can use a systemd watcher for both `currentsong.txt` and `spotmeta.txt`. As a result, you can place this repository wherever you want—for example, in your home folder (~), which remains untouched during updates. Personally, I prefer this method, as I got tired of copying everything back after every update.
 
-Ensure the correct permissions: `sudo chmod -R 777 lcd`
+Ensure the correct permissions: `sudo chmod -R 755 lcd`
 
 ## Example of systemd watcher configuration for `spotmeta.txt`
 `sudo nano /etc/systemd/system/spotwatcher.service`
