@@ -4,8 +4,7 @@ Script for displaying MoodeAudio cover art on a Waveshare 1.83-inch LCD screen. 
 
 https://www.waveshare.com/wiki/1.83inch_LCD_Module
 
-
-<img src="https://github.com/user-attachments/assets/06b68c89-d994-4f3c-93f7-e2eedc305546" style="width:300px; height:auto;"><br>
+<img src="https://github.com/user-attachments/assets/8c38addf-272e-420d-8e9a-0f944b51a7f7" style="width:300px; height:auto;"><br>
 <sub>The LCD in a temporary configuration consisting of an Argon One case and some Danish bricks.</sub><br>
 
 ## Prerequisites
