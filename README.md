@@ -4,8 +4,7 @@ Script for displaying MoodeAudio cover art on a Waveshare 1.83-inch LCD screen. 
 
 https://www.waveshare.com/wiki/1.83inch_LCD_Module
 
-
-<img src="https://github.com/user-attachments/assets/06b68c89-d994-4f3c-93f7-e2eedc305546" style="width:300px; height:auto;"><br>
+<img src="https://github.com/user-attachments/assets/c9af6a6b-e9e8-4b48-ad12-f0edb62be4c5" style="width:300px; height:auto;"><br>
 <sub>The LCD in a temporary configuration consisting of an Argon One case and some Danish bricks.</sub><br>
 
 ## Prerequisites
@@ -20,7 +19,7 @@ Install the required library: `pip install RPi.GPIO`
 ## Installation
 You can place `lcd_updater.py` and the `lib` folder under `/var/local/www/commandw/` and enable the LCD updater in MoodeAudio under ➡ Configure ➡ Peripherals. 
 
-Set the permissions: `sudo chmod 755 lcd_updater.py` and `sudo chmod -R 755 bin`
+Set the permissions: `sudo chmod 755 lcd_updater.py` and `sudo chmod -R 755 lib`
 
 ⚠ Note: `lcd_updater.py` is replaced with a stub after every update, so keep a backup elsewhere. Additionally, use a systemd watcher on `spotmeta.txt` to include Spotify metadata.
 
