@@ -43,10 +43,12 @@ def getMetaData() -> tuple[str, str, str]:
         if data.get("file")=="Spotify Active": #spotify uses spotmeta.txt instead of currentsong.txt
             with open('/var/local/www/spotmeta.txt', 'r') as spotfile:
                 spotdata=spotfile.readline().split('~~~')
-            song=spotdata[0]
-            artist=spotdata[1]
-            imageurl = next((item for item in spotdata if item.startswith("https://")), None).rstrip() 
-            #return elemment that starts with https:// instead of using index (url index changes sometimes)
+                song=spotdata[0]
+                artist=spotdata[1]
+                imageurl = next((item.strip() for item in spotdata if item.startswith("http")), None)
+                #return elemment that starts with http instead of using index (url index changes sometimes)
+                if not imageurl: #url not found on first line (multiple artists)
+                    imageurl = next((item.strip() for line in spotfile for item in line.strip().split('~~~') if item.startswith("http")),"")
         else: #local file or radio stream
             coverurl=data.get("coverurl").replace('%2F', '/')
             if coverurl.startswith('/'):
