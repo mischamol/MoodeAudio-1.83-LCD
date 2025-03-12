@@ -36,9 +36,7 @@ Description = Run LCD_updater.py on spotmeta change
 ConditionPathExists=/var/local/www/spotmeta.txt
 
 [Service]
-Type=simple
-ExecStartPre=/bin/bash -c '! pgrep -f ~/lcd/lcd_updater.py'
-ExecStart=/usr/bin/python3 ~/lcd/lcd_updater.py
+ExecStart=/usr/bin/python3 /home/username/lcd/lcd_updater.py
 ```
 `sudo nano /etc/systemd/system/spotwatcher.path`
 ```
@@ -64,9 +62,7 @@ Description = Run LCD_updater.py on currentsong.txt change
 ConditionPathExists=/var/local/www/currentsong.txt
 
 [Service]
-Type=simple
-ExecStartPre=/bin/bash -c '! pgrep -f ~/lcd/lcd_updater.py'
-ExecStart=/usr/bin/python3 ~/lcd/lcd_updater.py
+ExecStart=/usr/bin/python3 /home/username/lcd/lcd_updater.py
 ```
 `sudo nano /etc/systemd/system/currentsong.path`
 ```
