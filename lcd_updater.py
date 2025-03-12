@@ -41,7 +41,7 @@ def getMetaData() -> tuple[str, str, str]:
         #print(imageurl)
     return imageurl, song, artist
 
-def getSpotMetaData():
+def getSpotMetaData() -> tuple[str, str, str]:
     with open('/var/local/www/spotmeta.txt', 'r') as spotfile:
         spotdata=spotfile.readline().split('~~~')
         song=spotdata[0]
