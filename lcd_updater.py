@@ -30,14 +30,7 @@ def getMetaData() -> tuple[str, str, str]:
             key, value = line.strip().split('=', 1)  # split on first '='
             data[key] = value
         if data.get("file")=="Spotify Active": #spotify uses spotmeta.txt instead of currentsong.txt
-            with open('/var/local/www/spotmeta.txt', 'r') as spotfile:
-                spotdata=spotfile.readline().split('~~~')
-                song=spotdata[0]
-                artist=spotdata[1]
-                imageurl = next((item.strip() for item in spotdata if item.startswith("http")), None)
-                #return elemment that starts with http instead of using index (url index changes sometimes)
-                if not imageurl: #url not found on first line (multiple artists)
-                    imageurl = next((item.strip() for line in spotfile for item in line.strip().split('~~~') if item.startswith("http")),"")
+            imageurl, song, artist= getSpotMetaData()
         else: #local file or radio stream
             coverurl=data.get("coverurl").replace('%2F', '/')
             if coverurl.startswith('/'):
@@ -46,6 +39,17 @@ def getMetaData() -> tuple[str, str, str]:
             song=data.get("title")
             artist=data.get("artist")
         #print(imageurl)
+    return imageurl, song, artist
+
+def getSpotMetaData():
+    with open('/var/local/www/spotmeta.txt', 'r') as spotfile:
+        spotdata=spotfile.readline().split('~~~')
+        song=spotdata[0]
+        artist=spotdata[1]
+        imageurl = next((item.strip() for item in spotdata if item.startswith("http")), None)
+        #return first elemment that starts with http instead of using index (url index changes sometimes)
+        if not imageurl: #url not found on first line (multiple artists)
+            imageurl = next((item.strip() for line in spotfile for item in line.strip().split('~~~') if item.startswith("http")),"")
     return imageurl, song, artist
 
 def getImage(imageurl) -> Image.Image:
