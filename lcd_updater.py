@@ -31,6 +31,8 @@ def getMetaData() -> tuple[str, str, str]:
             data[key] = value
         if data.get("file")=="Spotify Active": #spotify uses spotmeta.txt instead of currentsong.txt
             imageurl, song, artist= getSpotMetaData()
+        elif data.get("file")=="AirPlay Active": #airplay
+            imageurl, song, artist="http://localhost/images/default-notfound-cover.png", data.get("outrate"), "Airplay"
         else: #local file or radio stream
             coverurl=data.get("coverurl").replace('%2F', '/')
             if coverurl.startswith('/'):
@@ -55,7 +57,7 @@ def getSpotMetaData() -> tuple[str, str, str]:
 def getImage(imageurl) -> Image.Image:
     response = requests.get(imageurl)
     if response.status_code!=200: #if not ok
-        response = requests.get("http://localhost/images/default-album-cover.png") #fallback to default cover         
+        response = requests.get("http://localhost/images/default-notfound-cover.png") #fallback to default cover         
     image=Image.open(BytesIO(response.content))
     return image
 
