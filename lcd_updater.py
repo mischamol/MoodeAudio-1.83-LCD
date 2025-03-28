@@ -28,13 +28,11 @@ def getMetaData() -> tuple[str, str, str]:
     with open('/var/local/www/currentsong.txt', 'r') as file:
         data = dict(line.strip().split('=', 1) for line in file)
     if data.get("file")=="Spotify Active": #spotify uses spotmeta.txt instead of currentsong.txt
-        imageurl, song, artist= getSpotMetaData()
+        return getSpotMetaData()
     elif data.get("file")=="AirPlay Active": #airplay
-        imageurl, song, artist="http://localhost/images/default-notfound-cover.jpg", data.get("outrate"), "Airplay"
-    else: #local file or radio stream
-        coverurl = 'http://localhost/'+ urllib.parse.unquote(data.get("coverurl")).lstrip('/')# strip leading / (added by local files, but not by streams)
-        imageurl, song, artist= coverurl, data.get("title"), data.get("artist")
-    return imageurl, song, artist
+        return "http://localhost/images/default-notfound-cover.jpg", data.get("outrate"), "Airplay"
+    coverurl = 'http://localhost/'+ urllib.parse.unquote(data.get("coverurl")).lstrip('/')# strip leading / (added by local files, but not by streams)
+    return coverurl, data.get("title"), data.get("artist")
 
 def getSpotMetaData() -> tuple[str, str, str]:
     with open('/var/local/www/spotmeta.txt', 'r') as spotfile:
