@@ -34,20 +34,14 @@ def getMetaData() -> tuple[str, str, str]:
         elif data.get("file")=="AirPlay Active": #airplay
             imageurl, song, artist="http://localhost/images/default-notfound-cover.jpg", data.get("outrate"), "Airplay"
         else: #local file or radio stream
-            coverurl=data.get("coverurl").replace('%2F', '/')
-            if coverurl.startswith('/'):
-                coverurl = coverurl[1:] #strip first "/" which is added when playing local files, but not with streams)
-            imageurl='http://localhost/'+ coverurl
-            song=data.get("title")
-            artist=data.get("artist")
-        #print(imageurl)
+            coverurl = data.get("coverurl").replace('%2F', '/').lstrip('/') # replace %2f with /; delete leading / (added by local files, but not by streams)
+            imageurl, song, artist='http://localhost/'+ coverurl, data.get("title"), data.get("artist")
     return imageurl, song, artist
 
 def getSpotMetaData() -> tuple[str, str, str]:
     with open('/var/local/www/spotmeta.txt', 'r') as spotfile:
         spotdata=spotfile.readline().split('~~~')
-        song=spotdata[0]
-        artist=spotdata[1]
+        song, artist=spotdata[0], spotdata[1]
         imageurl = next((item.strip() for item in spotdata if item.startswith("http")), None)
         #return first elemment that starts with http instead of using index (url index changes sometimes)
         if not imageurl: #url not found on first line (multiple artists)
