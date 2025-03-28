@@ -11,6 +11,7 @@ import spidev as SPI
 from lib import LCD_1inch83 #Waveshare lib
 from PIL import Image, ImageOps, ImageDraw, ImageFont
 import requests
+import urllib.parse
 from io import BytesIO
 
 # Raspberry Pi pin configuration:
@@ -24,18 +25,15 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))  # set working dir
 Font = ImageFont.truetype("lib/Font02.ttf", 18)
 
 def getMetaData() -> tuple[str, str, str]:
-    data = {}
     with open('/var/local/www/currentsong.txt', 'r') as file:
-        for line in file:
-            key, value = line.strip().split('=', 1)  # split on first '='
-            data[key] = value
-        if data.get("file")=="Spotify Active": #spotify uses spotmeta.txt instead of currentsong.txt
-            imageurl, song, artist= getSpotMetaData()
-        elif data.get("file")=="AirPlay Active": #airplay
-            imageurl, song, artist="http://localhost/images/default-notfound-cover.jpg", data.get("outrate"), "Airplay"
-        else: #local file or radio stream
-            coverurl = data.get("coverurl").replace('%2F', '/').lstrip('/') # replace %2f with /; delete leading / (added by local files, but not by streams)
-            imageurl, song, artist='http://localhost/'+ coverurl, data.get("title"), data.get("artist")
+        data = dict(line.strip().split('=', 1) for line in file)
+    if data.get("file")=="Spotify Active": #spotify uses spotmeta.txt instead of currentsong.txt
+        imageurl, song, artist= getSpotMetaData()
+    elif data.get("file")=="AirPlay Active": #airplay
+        imageurl, song, artist="http://localhost/images/default-notfound-cover.jpg", data.get("outrate"), "Airplay"
+    else: #local file or radio stream
+        coverurl = 'http://localhost/'+ urllib.parse.unquote(data.get("coverurl", "")).lstrip('/')# strip leading / (added by local files, but not by streams)
+        imageurl, song, artist= coverurl, data.get("title"), data.get("artist")
     return imageurl, song, artist
 
 def getSpotMetaData() -> tuple[str, str, str]:
@@ -45,7 +43,6 @@ def getSpotMetaData() -> tuple[str, str, str]:
     song, artist = all_items[0], all_items[1] 
     imageurl = next((item for item in all_items if item.startswith("http")), "")
     return imageurl, song, artist
-
 
 def getImage(imageurl) -> Image.Image:
     response = requests.get(imageurl)
