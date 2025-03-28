@@ -40,13 +40,12 @@ def getMetaData() -> tuple[str, str, str]:
 
 def getSpotMetaData() -> tuple[str, str, str]:
     with open('/var/local/www/spotmeta.txt', 'r') as spotfile:
-        spotdata=spotfile.readline().split('~~~')
-        song, artist=spotdata[0], spotdata[1]
-        imageurl = next((item.strip() for item in spotdata if item.startswith("http")), None)
-        #return first elemment that starts with http instead of using index (url index changes sometimes)
-        if not imageurl: #url not found on first line (multiple artists)
-            imageurl = next((item.strip() for line in spotfile for item in line.strip().split('~~~') if item.startswith("http")),"")
+        lines = spotfile.readlines()
+    all_items = [item.strip() for line in lines for item in line.strip().split('~~~')]
+    song, artist = all_items[0], all_items[1] 
+    imageurl = next((item for item in all_items if item.startswith("http")), "")
     return imageurl, song, artist
+
 
 def getImage(imageurl) -> Image.Image:
     response = requests.get(imageurl)
