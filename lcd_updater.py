@@ -76,9 +76,9 @@ try:
     disp.clear()
     disp.bl_DutyCycle(50) #set backlight brightness 
     imageurl, song, artist =getMetaData()
-    coverart=getImage(imageurl)
-    image=drawImage(coverart, song, artist)
-    disp.ShowImage(image)
+    image=getImage(imageurl)
+    screenImage=drawImage(image, song, artist)
+    disp.ShowImage(screenImage)
     disp.module_exit()
 except IOError as e:
     logging.info(e)  
