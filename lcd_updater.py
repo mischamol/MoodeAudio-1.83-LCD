@@ -32,7 +32,7 @@ def getMetaData() -> tuple[str, str, str]:
     elif data.get("file")=="AirPlay Active": #airplay
         imageurl, song, artist="http://localhost/images/default-notfound-cover.jpg", data.get("outrate"), "Airplay"
     else: #local file or radio stream
-        coverurl = 'http://localhost/'+ urllib.parse.unquote(data.get("coverurl", "")).lstrip('/')# strip leading / (added by local files, but not by streams)
+        coverurl = 'http://localhost/'+ urllib.parse.unquote(data.get("coverurl")).lstrip('/')# strip leading / (added by local files, but not by streams)
         imageurl, song, artist= coverurl, data.get("title"), data.get("artist")
     return imageurl, song, artist
 
@@ -75,7 +75,7 @@ try:
     disp.Init()
     disp.clear()
     disp.bl_DutyCycle(50) #set backlight brightness 
-    imageurl, song, artist =getMetaData()
+    imageurl, song, artist = getMetaData()
     image=getImage(imageurl)
     screenImage=drawImage(image, song, artist)
     disp.ShowImage(screenImage)
