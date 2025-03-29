@@ -30,7 +30,7 @@ def getMetaData() -> tuple[str, str, str]:
     if data.get("file")=="Spotify Active": #spotify uses spotmeta.txt instead of currentsong.txt
         return getSpotMetaData()
     elif data.get("file")=="AirPlay Active": #airplay
-        return "http://localhost/images/default-notfound-cover.jpg", data.get("outrate"), "Airplay"
+        return "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/AirPlay_logo.svg/240px-AirPlay_logo.svg.png", data.get("outrate"), "Airplay"
     coverurl = 'http://localhost/'+ urllib.parse.unquote(data.get("coverurl")).lstrip('/')# strip leading / (added by local files, but not by streams)
     return coverurl, data.get("title"), data.get("artist")
 
