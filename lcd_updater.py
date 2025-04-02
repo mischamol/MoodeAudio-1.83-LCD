@@ -42,11 +42,12 @@ def getSpotMetaData() -> tuple[str, str, str]:
     return imageurl, song, artist
 
 def getImage(imageurl) -> Image.Image:
-    response = requests.get(imageurl)
-    if response.status_code!=200: #if not ok
+    try:
+        response = requests.get(imageurl)
+        Image.open(BytesIO(response.content)).verify()
+    except: #not a valid url of valid image
         response = requests.get("http://localhost/images/default-notfound-cover.jpg") #fallback to default cover       
-    image=Image.open(BytesIO(response.content))
-    return image
+    return Image.open(BytesIO(response.content))
 
 def roundImage(image, radius) -> Image.Image:
     image = image.convert("RGBA")
