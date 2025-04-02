@@ -1,8 +1,7 @@
 #!/usr/bin/python3
 #
 # Script for displaying coverart from MoodeAudio on Waveshare 1.83 inch lcd screen.
-# This script uses the library files and fonts that came with the Waveshare example.
-# These files are included in the lib folder of this repo.
+# This script uses the library files and fonts that came with the Waveshare example (included in the lib folder).
 
 import os
 import sys 
@@ -39,7 +38,7 @@ def getSpotMetaData() -> tuple[str, str, str]:
         lines = spotfile.readlines()
     all_items = [item.strip() for line in lines for item in line.strip().split('~~~')]
     song, artist = all_items[0], all_items[1] 
-    imageurl = next((item for item in all_items if item.startswith("http")), "")
+    imageurl = next((item for item in all_items if item.startswith("https://i.scdn.co/")), "")
     return imageurl, song, artist
 
 def getImage(imageurl) -> Image.Image:
@@ -74,6 +73,7 @@ try:
     disp.clear()
     disp.bl_DutyCycle(50) #set backlight brightness 
     imageurl, song, artist = getMetaData()
+    print(imageurl)
     image=getImage(imageurl)
     screenImage=drawImage(image, song, artist)
     disp.ShowImage(screenImage)
