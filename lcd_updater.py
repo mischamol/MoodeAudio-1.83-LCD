@@ -44,7 +44,7 @@ def getSpotMetaData() -> tuple[str, str, str]:
 def getImage(imageurl) -> Image.Image:
     response = requests.get(imageurl)
     if response.status_code!=200: #if not ok
-        response = requests.get("http://localhost/images/default-notfound-cover.jpg") #fallback to default cover         
+        response = requests.get("http://localhost/images/default-notfound-cover.jpg") #fallback to default cover       
     image=Image.open(BytesIO(response.content))
     return image
 
@@ -73,7 +73,6 @@ try:
     disp.clear()
     disp.bl_DutyCycle(50) #set backlight brightness 
     imageurl, song, artist = getMetaData()
-    print(imageurl)
     image=getImage(imageurl)
     screenImage=drawImage(image, song, artist)
     disp.ShowImage(screenImage)
