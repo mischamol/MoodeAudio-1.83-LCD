@@ -37,9 +37,8 @@ def getSpotMetaData() -> tuple[str, str, str]:
     with open('/var/local/www/spotmeta.txt', 'r') as spotfile:
         lines = spotfile.readlines()
     all_items = [item.strip() for line in lines for item in line.strip().split('~~~')]
-    song, artist = all_items[0], all_items[1] 
     imageurl = next((item for item in all_items if item.startswith("https://i.scdn.co/")), "")
-    return imageurl, song, artist
+    return imageurl, all_items[0], all_items[1] #return imageurl, song, artist
 
 def getImage(imageurl) -> Image.Image:
     try:
