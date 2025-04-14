@@ -37,16 +37,16 @@ def getSpotMetaData() -> tuple[str, str, str]:
     with open('/var/local/www/spotmeta.txt', 'r') as spotfile:
         lines = spotfile.readlines()
     all_items = [item.strip() for line in lines for item in line.strip().split('~~~')]
-    imageurl = next((item for item in all_items if item.startswith("https://i.scdn.co/")), "")
-    return imageurl, all_items[0], all_items[1] #return imageurl, song, artist
+    coverurl = next((item for item in all_items if item.startswith("https://i.scdn.co/")), "")
+    return coverurl, all_items[0], all_items[1] #return coverurl, song, artist
 
-def getImage(imageurl) -> Image.Image:
+def getImage(coverurl) -> Image.Image:
     try:
-        response = requests.get(imageurl)
+        response = requests.get(coverurl)
         Image.open(BytesIO(response.content)).verify()
     except: #if not a valid url or valid image fallback to default cover
         response = requests.get("http://localhost/images/default-notfound-cover.jpg")     
-    return Image.open(BytesIO(response.content))
+    return Image.open(BytesIO(response.content)) #need to re-open after verify()
 
 def roundImage(image, radius) -> Image.Image:
     image = image.convert("RGBA")
@@ -72,9 +72,9 @@ try:
     disp.Init()
     disp.clear()
     disp.bl_DutyCycle(50) #set backlight brightness 
-    imageurl, song, artist = getMetaData()
-    image=getImage(imageurl)
-    screenImage=drawImage(image, song, artist)
+    coverurl, song, artist = getMetaData()
+    coverart=getImage(coverurl)
+    screenImage=drawImage(coverart, song, artist)
     disp.ShowImage(screenImage)
     disp.module_exit()
 except IOError as e:
