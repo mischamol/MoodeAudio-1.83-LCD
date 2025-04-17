@@ -42,7 +42,7 @@ def getExternalMetadata(source: str) -> tuple[str, str, str]:
     }[source](items) # if source 'Spotify Active' look for first iten that starts with http://...; if airplay look for first iten that ends with .jpg
     return coverurl, items[0], items[1]
 
-def getImage(coverurl) -> Image.Image:
+def getImage(coverurl: str) -> Image.Image:
     try:
         response = requests.get(coverurl)
         Image.open(BytesIO(response.content)).verify()
@@ -50,7 +50,7 @@ def getImage(coverurl) -> Image.Image:
         response = requests.get("http://localhost/images/default-notfound-cover.jpg")     
     return Image.open(BytesIO(response.content)) #need to re-open after verify()
 
-def roundImage(image, radius) -> Image.Image:
+def roundImage(image: Image.Image, radius: float) -> Image.Image:
     image = image.convert("RGBA")
     mask = Image.new("L", image.size, 0)
     draw = ImageDraw.Draw(mask)
@@ -60,7 +60,7 @@ def roundImage(image, radius) -> Image.Image:
     rounded_image.paste(image, (0, 0), mask=mask)
     return rounded_image
 
-def drawImage(image, song, artist)-> Image.Image:
+def drawImage(image: Image.Image, song: str, artist: str)-> Image.Image:
     image = image.resize((240, 240))
     image=roundImage(image, 40)
     image = ImageOps.pad(image, (240, 280), method=Image.Resampling.BILINEAR, color=(0, 0, 0), centering=(0.5, 0)) #padding with black 
@@ -75,7 +75,6 @@ try:
     disp.clear()
     disp.bl_DutyCycle(50) #set backlight brightness 
     coverurl, song, artist = getMetaData()
-    print(coverurl)
     coverart=getImage(coverurl)
     screenImage=drawImage(coverart, song, artist)
     disp.ShowImage(screenImage)
