@@ -20,14 +20,15 @@ You can place `lcd_updater.py` and the `lib` folder under `/var/local/www/comman
 
 Set the permissions: `sudo chmod 755 lcd_updater.py` and `sudo chmod -R 755 lib`
 
-⚠ Note: `lcd_updater.py` is replaced with a stub after every update, so keep a backup elsewhere. Additionally, use a systemd watcher on `spotmeta.txt` to include Spotify metadata.
+⚠ Note: `lcd_updater.py` is replaced with a stub after every update, so keep a backup elsewhere. Additionally, use a systemd watcher on `spotmeta.txt` and `aplmeta.txt` to include Spotify and Airplay metadata .
 
 ## Alternative Installation Method
 Instead of enabling the LCD updater in MoodeAudio, you can use a systemd watcher for both `currentsong.txt` and `spotmeta.txt`. As a result, you can place this repository wherever you want—for example, in your home folder (~), which remains untouched during updates. Personally, I prefer this method, as I got tired of copying everything back after every update.
 
 Ensure the correct permissions: `sudo chmod -R 755 lcd`
 
-## Example of systemd watcher configuration for `spotmeta.txt`
+## Example of systemd watcher configuration for `spotmeta.txt` 
+Tip: Don't forget to change `username` in the path with your own.
 `sudo nano /etc/systemd/system/spotwatcher.service`
 ```
 [Unit]
@@ -41,6 +42,7 @@ ExecStart=/usr/bin/python3 /home/username/lcd/lcd_updater.py
 ```
 [Unit]
 Description=Monitor spotmeta.txt and trigger spotwatcher service
+After=network.target
 
 [Path]
 PathModified=/var/local/www/spotmeta.txt
@@ -52,8 +54,34 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 sudo systemctl enable --now spotwatcher.path
 ```
+## Example of systemd watcher configuration for `aplmeta.txt`
+`sudo nano /etc/systemd/system/aplwatcher.service`
+```
+[Unit]
+Description = Run LCD_updater.py on aplmeta change
+ConditionPathExists=/var/local/www/aplmeta.txt
 
-## Example of optional systemd watcher configuration for `currentsong.txt`
+[Service]
+ExecStart=/usr/bin/python3 /home/username/lcd/lcd_updater.py
+```
+`sudo nano /etc/systemd/system/aplwatcher.path`
+```
+[Unit]
+Description=Monitor aplmeta.txt and trigger aplwatcher service
+After=network.target
+
+[Path]
+PathModified=/var/local/www/aplmeta.txt
+
+[Install]
+WantedBy=multi-user.target
+```
+```
+sudo systemctl daemon-reload
+sudo systemctl enable --now aplwatcher.path
+```
+
+## Example of optional systemd watcher configuration for `currentsong.txt` 
 `sudo nano /etc/systemd/system/currentsong.service`
 ```
 [Unit]
@@ -67,6 +95,7 @@ ExecStart=/usr/bin/python3 /home/username/lcd/lcd_updater.py
 ```
 [Unit]
 Description=Monitor currentsong.txt and trigger currentsong service
+After=network.target
 
 [Path]
 PathModified=/var/local/www/currentsong.txt
