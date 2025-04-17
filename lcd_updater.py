@@ -25,27 +25,22 @@ Font = ImageFont.truetype("lib/Font02.ttf", 18)
 
 def getMetaData() -> tuple[str, str, str]:
     with open('/var/local/www/currentsong.txt', 'r') as file:
-        data = dict(line.strip().split('=', 1) for line in file)
-    if data.get("file")=="Spotify Active": #spotify uses spotmeta.txt instead of currentsong.txt
-        return getSpotMetaData()
-    elif data.get("file")=="AirPlay Active": #airplay uses aplmeta.txt
-        return getAppleMetaData()
-    coverurl = 'http://localhost/'+ urllib.parse.unquote(data.get("coverurl")).lstrip('/')# strip leading / (added by local files, but not by streams)
-    return coverurl, data.get("title"), data.get("artist")
+        data = dict(line.strip().split('=', 1) for line in file if '=' in line)
+    source = data.get("file") 
+    if source in ("Spotify Active", "AirPlay Active"):
+        return getExternalMetadata(source)
+    coverurl = urllib.parse.unquote(data.get("coverurl", "")).lstrip('/')
+    return f"http://localhost/{coverurl}", data.get("title", ""), data.get("artist", "")
 
-def getSpotMetaData() -> tuple[str, str, str]:
-    with open('/var/local/www/spotmeta.txt', 'r') as spotfile:
-        lines = spotfile.readlines()
-    all_items = [item.strip() for line in lines for item in line.strip().split('~~~')]
-    coverurl = next((item for item in all_items if item.startswith("https://i.scdn.co/")), "")
-    return coverurl, all_items[0], all_items[1] #return coverurl, song, artist
-
-def getAppleMetaData() -> tuple[str, str, str]:
-    with open('/var/local/www/aplmeta.txt', 'r') as aplfile:
-        lines = aplfile.readlines()
-    all_items = [item.strip() for line in lines for item in line.strip().split('~~~')]
-    coverurl = next((item for item in all_items if item.endswith(".jpg")), "")
-    return "http://localhost/" + coverurl, all_items[0], all_items[1] #return coverurl, song, artist
+def getExternalMetadata(source: str) -> tuple[str, str, str]:
+    path = {"Spotify Active": "/var/local/www/spotmeta.txt", "AirPlay Active": "/var/local/www/aplmeta.txt"}[source]
+    with open(path, 'r') as f:
+        items = [i.strip() for line in f for i in line.strip().split('~~~')]
+    coverurl = {
+        "Spotify Active": lambda i: next(x for x in i if x.startswith("https://i.scdn.co/")), 
+        "AirPlay Active": lambda i: "http://localhost/" + next(x for x in i if x.endswith(".jpg")) 
+    }[source](items) # if source 'Spotify Active' look for first iten that starts with http://...; if airplay look for first iten that ends with .jpg
+    return coverurl, items[0], items[1]
 
 def getImage(coverurl) -> Image.Image:
     try:
@@ -80,6 +75,7 @@ try:
     disp.clear()
     disp.bl_DutyCycle(50) #set backlight brightness 
     coverurl, song, artist = getMetaData()
+    print(coverurl)
     coverart=getImage(coverurl)
     screenImage=drawImage(coverart, song, artist)
     disp.ShowImage(screenImage)
