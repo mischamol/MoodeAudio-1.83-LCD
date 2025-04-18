@@ -25,12 +25,12 @@ Font = ImageFont.truetype("lib/Font02.ttf", 18)
 
 def getMetaData() -> tuple[str, str, str]:
     with open('/var/local/www/currentsong.txt', 'r') as file:
-        data = dict(line.strip().split('=', 1) for line in file if '=' in line)
+        data = dict(line.strip().split('=', 1) for line in file)
     source = data.get("file") 
     if source in ("Spotify Active", "AirPlay Active"):
         return getExternalMetadata(source)
-    coverurl = urllib.parse.unquote(data.get("coverurl", "")).lstrip('/')
-    return f"http://localhost/{coverurl}", data.get("title", ""), data.get("artist", "")
+    coverurl = urllib.parse.unquote(data.get("coverurl")).lstrip('/') #locall files start with /, radio streams without
+    return f"http://localhost/{coverurl}", data.get("title"), data.get("artist")
 
 def getExternalMetadata(source: str) -> tuple[str, str, str]:
     path = {"Spotify Active": "/var/local/www/spotmeta.txt", "AirPlay Active": "/var/local/www/aplmeta.txt"}[source]
@@ -39,7 +39,7 @@ def getExternalMetadata(source: str) -> tuple[str, str, str]:
     coverurl = {
         "Spotify Active": lambda i: next(x for x in i if x.startswith("https://i.scdn.co/")), 
         "AirPlay Active": lambda i: "http://localhost/" + next(x for x in i if x.endswith(".jpg")) 
-    }[source](items) # if source 'Spotify Active' look for first iten that starts with http://...; if airplay look for first iten that ends with .jpg
+    }[source](items) # if source 'Spotify Active' look for first item that starts with http://...; if airplay look for first iten that ends with .jpg
     return coverurl, items[0], items[1]
 
 def getImage(coverurl: str) -> Image.Image:
