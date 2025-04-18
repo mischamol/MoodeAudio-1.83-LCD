@@ -12,6 +12,7 @@ from PIL import Image, ImageOps, ImageDraw, ImageFont
 import requests
 import urllib.parse
 from io import BytesIO
+import time
 
 # Raspberry Pi pin configuration:
 RST = 27
@@ -22,15 +23,16 @@ device = 0
 logging.basicConfig(level = logging.WARNING)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))  # set working dir
 Font = ImageFont.truetype("lib/Font02.ttf", 18)
+VOLUME_CACHE_PATH = "/tmp/previous_volume.txt"
 
-def getMetaData() -> tuple[str, str, str]:
+def getMetaData() -> tuple[str, str, str, int]:
     with open('/var/local/www/currentsong.txt', 'r') as file:
         data = dict(line.strip().split('=', 1) for line in file)
     source = data.get("file") 
     if source in ("Spotify Active", "AirPlay Active"):
         return getExternalMetadata(source)
     coverurl = urllib.parse.unquote(data.get("coverurl")).lstrip('/') #locall files start with /, radio streams without
-    return f"http://localhost/{coverurl}", data.get("title"), data.get("artist")
+    return f"http://localhost/{coverurl}", data.get("title"), data.get("artist"), int(data.get("volume"))
 
 def getExternalMetadata(source: str) -> tuple[str, str, str]:
     path = {"Spotify Active": "/var/local/www/spotmeta.txt", "AirPlay Active": "/var/local/www/aplmeta.txt"}[source]
@@ -69,15 +71,53 @@ def drawImage(image: Image.Image, song: str, artist: str)-> Image.Image:
     draw.text((25, 260), song , fill = "WHITE",font=Font)
     return image
 
+def get_previous_volume() -> int:
+    if os.path.exists(VOLUME_CACHE_PATH):
+        try:
+            with open(VOLUME_CACHE_PATH, 'r') as f:
+                return int(f.read().strip())
+        except:
+            return -1
+    return -1
+
+def set_previous_volume(volume: int):
+    try:
+        with open(VOLUME_CACHE_PATH, 'w') as f:
+            f.write(str(volume))
+    except Exception as e:
+        logging.warning(f"Error saving volume: {e}")
+
+def draw_volume_overlay(image: Image.Image, volume: int) -> Image.Image:
+    overlay = image.copy().convert("RGBA")
+    width, height, radius = 240, 240, 40 
+    rect = Image.new("RGBA", overlay.size, (0, 0, 0, 0))
+    ImageDraw.Draw(rect).rounded_rectangle([(0, 0), (width, height)], radius=radius, fill=(100, 100, 100, 200))
+    overlay = Image.alpha_composite(overlay, rect)
+    font = ImageFont.truetype("lib/Font02.ttf", 72)
+    text = f"{volume}%"
+    text_size = font.getsize(text)
+    pos = ((width - text_size[0]) // 2, (height - text_size[1]) // 2)
+    draw = ImageDraw.Draw(overlay)
+    draw.text(pos, text, font=font, fill=(255, 255, 255, 255))
+    return overlay.convert("RGB")
+
+
 try:
     disp = LCD_1inch83.LCD_1inch83(spi=SPI.SpiDev(bus, device),spi_freq=10000000,rst=RST,dc=DC,bl=BL)
     disp.Init()
     disp.clear()
     disp.bl_DutyCycle(50) #set backlight brightness 
-    coverurl, song, artist = getMetaData()
+    coverurl, song, artist, volume = getMetaData()
     coverart=getImage(coverurl)
     screenImage=drawImage(coverart, song, artist)
     disp.ShowImage(screenImage)
+    previous_volume = get_previous_volume()
+    if volume != -1 and volume != previous_volume:
+        overlay = draw_volume_overlay(screenImage, volume)
+        disp.ShowImage(overlay)
+        time.sleep(1)
+        disp.ShowImage(screenImage)
+        set_previous_volume(volume)
     disp.module_exit()
 except IOError as e:
     logging.info(e)  
