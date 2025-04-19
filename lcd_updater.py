@@ -118,19 +118,16 @@ try:
     coverart = getImage(coverurl)
     screenImage = drawImage(coverart, song, artist)
     previous_volume = getPreviousVolume()
+    image_to_show = screenImage
     if source not in ("Spotify Active", "AirPlay Active"):
         if volume != -1 and volume != previous_volume:
             overlay = drawOverlay(screenImage, volume, "")
             disp.ShowImage(overlay)
             time.sleep(1)
             setPreviousVolume(volume)
-        if state in ("pause", "stop") or mute=="1":
-            overlay = drawOverlay(screenImage, volume, state, mute)
-            disp.ShowImage(overlay)
-        else:
-            disp.ShowImage(screenImage)
-    else:
-        disp.ShowImage(screenImage)
+        if state in ("pause", "stop") or mute == "1":
+            image_to_show = drawOverlay(screenImage, volume, state, mute)
+    disp.ShowImage(image_to_show)
     disp.module_exit()
 except IOError as e:
     logging.info(e)
