@@ -29,13 +29,10 @@ def getMetaData() -> tuple[str, str, str, str, str, str, str]:
     with open('/var/local/www/currentsong.txt', 'r') as file:
         data = dict(line.strip().split('=', 1) for line in file)
     source = data.get("file") 
-    if source in ("Spotify Active", "AirPlay Active"):
-        coverurl, title, artist = getExternalMetadata(source)
-    else:
-        coverurl = "http://localhost/" + urllib.parse.unquote(data.get("coverurl")).lstrip('/') #stream starts with /, files not
-        title = data.get("title")
-        artist = data.get("artist")
-    return coverurl, title, artist, data.get("volume"), data.get("state"), source, data.get("mute")
+    if source in ("Spotify Active", "AirPlay Active"): # * below is to unpack the tuple
+        return (*getExternalMetadata(source), data.get("volume"), data.get("state"), source, data.get("mute"))
+    coverurl = "http://localhost/" + urllib.parse.unquote(data.get("coverurl")).lstrip('/') #stream starts with /, files not
+    return coverurl, data.get("title"), data.get("artist"), data.get("volume"), data.get("state"), source, data.get("mute")
 
 def getExternalMetadata(source: str) -> tuple[str, str, str]:
     path = {"Spotify Active": "/var/local/www/spotmeta.txt", "AirPlay Active": "/var/local/www/aplmeta.txt"}[source]
