@@ -25,17 +25,17 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))  # set working dir
 Font = ImageFont.truetype("lib/Font02.ttf", 18)
 VOLUME_CACHE_PATH = "/tmp/previous_volume.txt"
 
-def getMetaData() -> tuple[str, str, str, int, str]:
+def getMetaData() -> tuple[str, str, str, str, str, str]:
     with open('/var/local/www/currentsong.txt', 'r') as file:
         data = dict(line.strip().split('=', 1) for line in file)
     source = data.get("file") 
     if source in ("Spotify Active", "AirPlay Active"):
         coverurl, title, artist = getExternalMetadata(source)
     else:
-        coverurl = urllib.parse.unquote(data.get("coverurl")).lstrip('/')
+        coverurl = "http://localhost/" + urllib.parse.unquote(data.get("coverurl")).lstrip('/') #stream starts with /, files not
         title = data.get("title")
         artist = data.get("artist")
-    return f"http://localhost/{coverurl}", title, artist, int(data.get("volume")), data.get("state")
+    return coverurl, title, artist, data.get("volume"), data.get("state"), source
 
 def getExternalMetadata(source: str) -> tuple[str, str, str]:
     path = {"Spotify Active": "/var/local/www/spotmeta.txt", "AirPlay Active": "/var/local/www/aplmeta.txt"}[source]
@@ -74,17 +74,17 @@ def drawImage(image: Image.Image, song: str, artist: str)-> Image.Image:
     draw.text((25, 260), song , fill = "WHITE",font=Font)
     return image
 
-def getPreviousVolume() -> int:
+def getPreviousVolume() -> str:
     try:
         with open(VOLUME_CACHE_PATH, 'r') as f:
-            return int(f.read().strip())
+            return f.read().strip()
     except:
         return -1
 
-def setPreviousVolume(volume: int):
+def setPreviousVolume(volume: str):
     try:
         with open(VOLUME_CACHE_PATH, 'w') as f:
-            f.write(str(volume))
+            f.write(volume)
     except Exception as e:
         logging.warning(f"Error saving volume: {e}")
 
@@ -112,19 +112,21 @@ try:
     disp = LCD_1inch83.LCD_1inch83(spi=SPI.SpiDev(bus, device),spi_freq=10000000,rst=RST,dc=DC,bl=BL)
     disp.Init()
     disp.bl_DutyCycle(50)
-    coverurl, song, artist, volume, state = getMetaData()
+    coverurl, song, artist, volume, state, source = getMetaData()
     coverart = getImage(coverurl)
     screenImage = drawImage(coverart, song, artist)
-    disp.ShowImage(screenImage)
     previous_volume = getPreviousVolume()
-    if volume != -1 and volume != previous_volume:
-        overlay = drawOverlay(screenImage, volume, "")
-        disp.ShowImage(overlay)
-        time.sleep(1)
-        setPreviousVolume(volume)
-    if state.lower() in ("pause", "stop"):
-        overlay = drawOverlay(screenImage, volume, state)
-        disp.ShowImage(overlay)
+    if source not in ("Spotify Active", "AirPlay Active"):
+        if volume != -1 and volume != previous_volume:
+            overlay = drawOverlay(screenImage, volume, "")
+            disp.ShowImage(overlay)
+            time.sleep(1)
+            setPreviousVolume(volume)
+        if state in ("pause", "stop"):
+            overlay = drawOverlay(screenImage, volume, state)
+            disp.ShowImage(overlay)
+        else:
+            disp.ShowImage(screenImage)
     else:
         disp.ShowImage(screenImage)
     disp.module_exit()
