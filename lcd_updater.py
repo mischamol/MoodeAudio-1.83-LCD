@@ -25,7 +25,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))  # set working dir
 Font = ImageFont.truetype("lib/Font02.ttf", 18)
 VOLUME_CACHE_PATH = "/tmp/previous_volume.txt"
 
-def getMetaData() -> tuple[str, str, str, str, str, str]:
+def getMetaData() -> tuple[str, str, str, str, str, str, str]:
     with open('/var/local/www/currentsong.txt', 'r') as file:
         data = dict(line.strip().split('=', 1) for line in file)
     source = data.get("file") 
@@ -35,7 +35,7 @@ def getMetaData() -> tuple[str, str, str, str, str, str]:
         coverurl = "http://localhost/" + urllib.parse.unquote(data.get("coverurl")).lstrip('/') #stream starts with /, files not
         title = data.get("title")
         artist = data.get("artist")
-    return coverurl, title, artist, data.get("volume"), data.get("state"), source
+    return coverurl, title, artist, data.get("volume"), data.get("state"), source, data.get("mute")
 
 def getExternalMetadata(source: str) -> tuple[str, str, str]:
     path = {"Spotify Active": "/var/local/www/spotmeta.txt", "AirPlay Active": "/var/local/www/aplmeta.txt"}[source]
@@ -88,7 +88,7 @@ def setPreviousVolume(volume: str):
     except Exception as e:
         logging.warning(f"Error saving volume: {e}")
 
-def drawOverlay(image: Image.Image, volume: int, state: str = "") -> Image.Image:
+def drawOverlay(image: Image.Image, volume: str, state: str = "", mute="") -> Image.Image:
     overlay = image.convert("RGBA")
     image_width, image_height = overlay.size[0], overlay.size[0]
     center_x, center_y, radius = image_width // 2, image_height // 2, image_width // 3
@@ -96,9 +96,11 @@ def drawOverlay(image: Image.Image, volume: int, state: str = "") -> Image.Image
     ImageDraw.Draw(circle_layer).ellipse([center_x - radius, center_y - radius, center_x + radius, center_y + radius], fill=(100, 100, 100, 200))
     overlay = Image.alpha_composite(overlay, circle_layer)
     font = ImageFont.truetype("lib/Font02.ttf", 64)
-    if state.lower() == "pause":
+    if mute=="1":
+        text="Mute"
+    elif state == "pause":
         text = "||"
-    elif state.lower() == "stop":
+    elif state == "stop":
         text = "■"
     else:
         text = f"{volume}%"
@@ -112,7 +114,7 @@ try:
     disp = LCD_1inch83.LCD_1inch83(spi=SPI.SpiDev(bus, device),spi_freq=10000000,rst=RST,dc=DC,bl=BL)
     disp.Init()
     disp.bl_DutyCycle(50)
-    coverurl, song, artist, volume, state, source = getMetaData()
+    coverurl, song, artist, volume, state, source, mute = getMetaData()
     coverart = getImage(coverurl)
     screenImage = drawImage(coverart, song, artist)
     previous_volume = getPreviousVolume()
@@ -122,8 +124,8 @@ try:
             disp.ShowImage(overlay)
             time.sleep(1)
             setPreviousVolume(volume)
-        if state in ("pause", "stop"):
-            overlay = drawOverlay(screenImage, volume, state)
+        if state in ("pause", "stop") or mute=="1":
+            overlay = drawOverlay(screenImage, volume, state, mute)
             disp.ShowImage(overlay)
         else:
             disp.ShowImage(screenImage)
