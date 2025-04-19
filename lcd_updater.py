@@ -88,7 +88,7 @@ def setPreviousVolume(volume: str):
     except Exception as e:
         logging.warning(f"Error saving volume: {e}")
 
-def drawOverlay(image: Image.Image, volume: str, state: str = "", mute="") -> Image.Image:
+def drawOverlay(image: Image.Image, volume: str ="", state: str = "", mute: str="") -> Image.Image:
     overlay = image.convert("RGBA")
     image_width, image_height = overlay.size[0], overlay.size[0]
     center_x, center_y, radius = image_width // 2, image_height // 2, image_width // 3
