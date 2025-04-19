@@ -23,7 +23,7 @@ device = 0
 logging.basicConfig(level = logging.WARNING)
 os.chdir(os.path.dirname(os.path.abspath(__file__)))  # set working dir
 Font = ImageFont.truetype("lib/Font02.ttf", 18)
-VOLUME_CACHE_PATH = "/tmp/previous_volume.txt"
+VOLUME_CACHE_PATH = "/tmp/previousVolume.txt"
 
 def getMetaData() -> tuple[str, str, str, str, str, str, str]:
     with open('/var/local/www/currentsong.txt', 'r') as file:
@@ -44,7 +44,7 @@ def getExternalMetadata(source: str) -> tuple[str, str, str]:
     coverurl = {
         "Spotify Active": lambda i: next(x for x in i if x.startswith("https://i.scdn.co/")), 
         "AirPlay Active": lambda i: "http://localhost/" + next(x for x in i if x.endswith(".jpg")) 
-    }[source](items)
+    }[source](items) 
     return coverurl, items[0], items[1]
 
 def getImage(coverurl: str) -> Image.Image:
@@ -61,9 +61,9 @@ def roundImage(image: Image.Image, radius: float) -> Image.Image:
     draw = ImageDraw.Draw(mask)
     width, height = image.size
     draw.rounded_rectangle((0, 0, width, height), radius=radius, fill=255)
-    rounded_image = Image.new("RGBA", image.size)
-    rounded_image.paste(image, (0, 0), mask=mask)
-    return rounded_image
+    roundedImage = Image.new("RGBA", image.size)
+    roundedImage.paste(image, (0, 0), mask=mask)
+    return roundedImage
 
 def drawImage(image: Image.Image, song: str, artist: str)-> Image.Image:
     image = image.resize((240, 240))
@@ -90,24 +90,17 @@ def setPreviousVolume(volume: str):
 
 def drawOverlay(image: Image.Image, volume: str ="", state: str = "", mute: str="") -> Image.Image:
     overlay = image.convert("RGBA")
-    image_width, image_height = overlay.size[0], overlay.size[0]
-    center_x, center_y, radius = image_width // 2, image_height // 2, image_width // 3
-    circle_layer = Image.new("RGBA", overlay.size, (0, 0, 0, 0))
-    ImageDraw.Draw(circle_layer).ellipse([center_x - radius, center_y - radius, center_x + radius, center_y + radius], fill=(100, 100, 100, 200))
-    overlay = Image.alpha_composite(overlay, circle_layer)
+    imageWidth, imageHeight = overlay.size[0], overlay.size[0] #center on the coverart,not the entire screen
+    centerX, centerY, radius = imageWidth // 2, imageHeight // 2, imageWidth // 3
+    circleLayer = Image.new("RGBA", overlay.size, (0, 0, 0, 0))
+    ImageDraw.Draw(circleLayer).ellipse([centerX - radius, centerY - radius, centerX + radius, centerY + radius], fill=(100, 100, 100, 200))
+    overlay = Image.alpha_composite(overlay, circleLayer)
     font = ImageFont.truetype("lib/Font02.ttf", 64)
-    if mute=="1":
-        text="Mute"
-    elif state == "pause":
-        text = "||"
-    elif state == "stop":
-        text = "■"
-    else:
-        text = f"{volume}%"
-    text_size = font.getsize(text)
-    text_position = ((image_width - text_size[0]) // 2, (image_height - text_size[1]) // 2)
-    draw_text = ImageDraw.Draw(overlay)
-    draw_text.text(text_position, text, font=font, fill=(255, 255, 255, 255))
+    text = "Mute" if mute == "1" else "||" if state == "pause" else "■" if state == "stop" else f"{volume}%"
+    textSize = font.getsize(text)
+    textPosition = ((imageWidth - textSize[0]) // 2, (imageHeight - textSize[1]) // 2)
+    drawText = ImageDraw.Draw(overlay)
+    drawText.text(textPosition, text, font=font, fill=(255, 255, 255, 255))
     return overlay.convert("RGB")
 
 try:
@@ -117,17 +110,17 @@ try:
     coverurl, song, artist, volume, state, source, mute = getMetaData()
     coverart = getImage(coverurl)
     screenImage = drawImage(coverart, song, artist)
-    previous_volume = getPreviousVolume()
-    image_to_show = screenImage
+    previousVolume = getPreviousVolume()
+    imageToShow = screenImage
     if source not in ("Spotify Active", "AirPlay Active"):
-        if volume != -1 and volume != previous_volume:
-            overlay = drawOverlay(screenImage, volume, "")
+        if volume != -1 and volume != previousVolume:
+            overlay = drawOverlay(screenImage, volume, None, None) #no state and mute, because they supersede volume
             disp.ShowImage(overlay)
             time.sleep(1)
             setPreviousVolume(volume)
         if state in ("pause", "stop") or mute == "1":
-            image_to_show = drawOverlay(screenImage, volume, state, mute)
-    disp.ShowImage(image_to_show)
+            imageToShow = drawOverlay(screenImage, None, state, mute)
+    disp.ShowImage(imageToShow)
     disp.module_exit()
 except IOError as e:
     logging.info(e)
