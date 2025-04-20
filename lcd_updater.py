@@ -94,8 +94,7 @@ def drawOverlay(image: Image.Image, volume: str ="", state: str = "", mute: str=
     overlay = Image.alpha_composite(overlay, circleLayer)
     font = ImageFont.truetype("lib/Font02.ttf", 64)
     text = "Mute" if mute == "1" else "||" if state == "pause" else "■" if state == "stop" else f"{volume}%"
-    textSize = font.getlength(text), font.size #drop in replacement for getsize
-    textPosition = ((imageWidth - textSize[0]) // 2, (imageHeight - textSize[1]) // 2)
+    textPosition = ((imageWidth - font.getlength(text)) // 2, (imageHeight - font.size) // 2)
     drawText = ImageDraw.Draw(overlay)
     drawText.text(textPosition, text, font=font, fill=(255, 255, 255, 255))
     return overlay.convert("RGB")

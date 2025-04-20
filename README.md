@@ -1,5 +1,5 @@
 # MoodeAudio Metadata on Waveshare 1.83-inch LCD
-Script for displaying coverart from MoodeAudio on Waveshare 1.83 inch lcd screen. This script uses the library files and fonts that came with the Waveshare example (included in the `lib` folder)<br>
+Script for displaying coverart from MoodeAudio on Waveshare 1.83 inch lcd screen. Currently the script supports metadata from local files, radio streams, Spotify and Airplay. This script uses the library files and fonts that came with the Waveshare example (included in the `lib` folder)<br>.
 
 https://www.waveshare.com/wiki/1.83inch_LCD_Module
 
