@@ -25,13 +25,13 @@ end
 begin
    prog = irexec
    button = KEY_VOLUMEUP
-   config = curl -G "http://localhost/command/index.php" -d "cmd=set_volume+-up+2"
+   config = curl -G "http://localhost/command/index.php" -d "cmd=set_volume+-up+5"
 end
 
 begin
    prog = irexec
    button = KEY_VOLUMEDOWN
-   config = curl -G "http://localhost/command/index.php" -d "cmd=set_volume+-dn+2"
+   config = curl -G "http://localhost/command/index.php" -d "cmd=set_volume+-dn+5"
 end
 
 begin
