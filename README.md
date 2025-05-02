@@ -1,10 +1,7 @@
 # MoodeAudio Metadata on Waveshare 1.83-inch LCD
 Script for displaying coverart and some basic information (volume, state and mute) from MoodeAudio on Waveshare 1.83 inch lcd screen. Currently the script supports metadata from local files, radio streams, Spotify and Airplay. This script uses the library files and fonts that came with the Waveshare example (included in the `lib` folder). The original example can be found here: https://www.waveshare.com/wiki/1.83inch_LCD_Module.<br>
 
-Note: This repo also includes a lircrc file for connecting the Argon One Remote to some basis Moode commands, after donwloading the argon script and running `argonone-ir`, you can replace the script in `/etc/lirc/` with this one. If you don't own a Argon case and remote you can just delete the lircrc file.
-
 <img src="https://github.com/user-attachments/assets/d196dd22-aabd-4242-a7ce-da621ec2eb97" style="width:300px; height:auto;"><br>
-
 
 <sub>The LCD showing volume overlay in an Argon One case and some Danish bricks.</sub><br>
 
@@ -25,7 +22,7 @@ Set the permissions: `sudo chmod 755 lcd_updater.py` and `sudo chmod -R 755 lib`
 ⚠ Note: `lcd_updater.py` is replaced with a stub after every update, so keep a backup elsewhere. Additionally, use a systemd watcher on `spotmeta.txt` and `aplmeta.txt` to include Spotify and Airplay metadata .
 
 ## Alternative Installation Method
-Instead of enabling the LCD updater in MoodeAudio, you can use a systemd watcher for both `currentsong.txt` and `spotmeta.txt`. As a result, you can place this repository wherever you want—for example, in your home folder (~), which remains untouched during updates. Personally, I prefer this method, as I got tired of copying everything back after every update.
+Instead of enabling the LCD updater in MoodeAudio, you can also use a systemd watcher for `currentsong.txt`. As a result, you can place this repository wherever you want—for example, in your home folder (~), which remains untouched during updates. Personally, I prefer this method, as I got tired of copying everything back after every update.
 
 Ensure the correct permissions: `sudo chmod -R 755 lcd`
 
@@ -111,3 +108,6 @@ sudo systemctl enable --now currentsong.path
 ```
 
 Enjoy!
+
+
+Note: This repo also includes a lircrc file for connecting the Argon One Remote to some basis Moode commands, after donwloading the argon script and running `argonone-ir`, you can replace the script in `/etc/lirc/` with this one. If you don't own a Argon case and remote you can just ignore or delete the lircrc file.
