@@ -6,7 +6,7 @@ Note: This repo also includes a lircrc file for connecting the Argon One Remote 
 <img src="https://github.com/user-attachments/assets/d196dd22-aabd-4242-a7ce-da621ec2eb97" style="width:300px; height:auto;"><br>
 
 
-<sub>The LCD in a temporary configuration consisting of an Argon One case and some Danish bricks.</sub><br>
+<sub>The LCD showing volume overlay in an Argon One case and some Danish bricks.</sub><br>
 
 ## Prerequisites
 Connect the screen according to the diagram below.
