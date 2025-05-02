@@ -1,5 +1,7 @@
 # MoodeAudio Metadata on Waveshare 1.83-inch LCD
-Script for displaying coverart and some basic information (volume, state and mute) from MoodeAudio on Waveshare 1.83 inch lcd screen. Currently the script supports metadata from local files, radio streams, Spotify and Airplay. This script uses the library files and fonts that came with the Waveshare example (included in the `lib` folder)<br>. The original example can be found here: https://www.waveshare.com/wiki/1.83inch_LCD_Module.  This repo also includes a lircrc file for connecting the Argon One Remote to some basis Moode commands, after donwloading the argon script and running `argonone-ir`, you can replace the script in `/etc/lirc/` with this one. If you don't own a Argon case and remote you can just delete the lircrc file.
+Script for displaying coverart and some basic information (volume, state and mute) from MoodeAudio on Waveshare 1.83 inch lcd screen. Currently the script supports metadata from local files, radio streams, Spotify and Airplay. This script uses the library files and fonts that came with the Waveshare example (included in the `lib` folder).<br> 
+The original example can be found here: https://www.waveshare.com/wiki/1.83inch_LCD_Module.<br>
+  This repo also includes a lircrc file for connecting the Argon One Remote to some basis Moode commands, after donwloading the argon script and running `argonone-ir`, you can replace the script in `/etc/lirc/` with this one. If you don't own a Argon case and remote you can just delete the lircrc file.
 
 <img src="https://github.com/user-attachments/assets/c9af6a6b-e9e8-4b48-ad12-f0edb62be4c5" style="width:300px; height:auto;"><br>
 <sub>The LCD in a temporary configuration consisting of an Argon One case and some Danish bricks.</sub><br>
