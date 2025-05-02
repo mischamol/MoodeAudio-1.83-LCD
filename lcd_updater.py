@@ -107,8 +107,8 @@ def determineOverlay(disp: LCD_1inch83, screenImage: Image.Image, volume: str, s
     previousVolume = getPreviousVolume()
     if source not in ("Spotify Active", "AirPlay Active"):
         if volume != -1 and volume != previousVolume:
-            overlay = drawOverlay(screenImage, volume, None, None)  #no state and mute, because they supersede volume
-            disp.ShowImage(overlay)
+            volumeOverlay = drawOverlay(screenImage, volume, None, None)  #no state and mute, because they supersede volume
+            disp.ShowImage(volumeOverlay)
             time.sleep(1)
             setPreviousVolume(volume)
         if state in ("pause", "stop") or mute == "1":
