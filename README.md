@@ -22,7 +22,7 @@ Set the permissions: `sudo chmod 755 lcd_updater.py` and `sudo chmod -R 755 lib`
 ⚠ Note: `lcd_updater.py` is replaced with a stub after every update, so keep a backup elsewhere. Additionally, use a systemd watcher on `spotmeta.txt` and `aplmeta.txt` to include Spotify and Airplay metadata .
 
 ## Alternative Installation Method
-Instead of enabling the LCD updater in MoodeAudio, you can also use a systemd watcher for `currentsong.txt`. As a result, you can place this repository wherever you want—for example, in your home folder (~), which remains untouched during updates. Personally, I prefer this method, as I got tired of copying everything back after every update.
+Instead of enabling the LCD updater in MoodeAudio, you can also only enable the metadata file under ➡ Configure ➡ Audio ➡ MPD Options and use a systemd watcher for `currentsong.txt`. As a result, you can place this repository wherever you want—for example, in your home folder (~), which remains untouched during updates. Personally, I prefer this method, as I got tired of copying everything back after every update.
 
 Ensure the correct permissions: `sudo chmod -R 755 lcd`
 
