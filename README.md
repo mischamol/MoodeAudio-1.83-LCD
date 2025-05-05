@@ -110,7 +110,7 @@ sudo systemctl enable --now currentsong.path
 Enjoy!
 
 
-Note: Mostly for acrhiving purposes, this repo also includes a lircrc file (`irexec.lircrc`) for connecting the Argon One Remote to some basic Moode commands (toggle, volume, next, previous etc.), after donwloading the argon script and running `argonone-ir`, you can replace the script in `/etc/lirc/` with this one. If you don't own a Argon case and remote you can just ignore or delete the lircrc file. 
+Note: Primarily for archival purposes, this repository also includes a lircrc file (`irexec.lircrc`) that maps the Argon One Remote to basic Moode commands (such as toggle, volume, next, previous, etc.). After downloading the Argon script and running`argonone-ir`, you can replace the existing script in `/etc/lirc/` with this one. If you don't own a Argon case and remote you can just ignore or delete the lircrc file. 
 <br>
 
-Note2: Also for archiving purposes, I also included the bricklink studio file (`1.83inchLCDCasing.io`) I created for the casing of the screen as shown on the picture above.  
+Note2: Also for archiving purposes, I included the bricklink studio file (`1.83inchLCDCasing.io`), which contains the design of the screen casing as shown in the image above.
