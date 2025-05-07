@@ -107,6 +107,10 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now currentsong.path
 ```
 
+By default, MoodeAudio updates `currentsong.txt` every 3 seconds via `/var/www/daemon/worker.php`. Personally, I found this a bit unresponsive for my overlay, so I patched the original `WORKER_SLEEP` constant value from 3000000 microseconds to 500000 microseconds.
+
+`sudo sed -i 's/const WORKER_SLEEP = [0-9]\+;/const WORKER_SLEEP = 500000;/' /var/www/inc/sleep-interval.php`
+
 Enjoy!
 
 
