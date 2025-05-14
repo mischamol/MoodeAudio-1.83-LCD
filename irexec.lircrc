@@ -37,5 +37,5 @@ end
 begin
     prog = irexec
     button = KEY_OK
-    config = mpc toggle
+    config = /bin/bash -c '[[ $(mpc current -f %file%) == http* ]] && (mpc status | grep '\[playing\]' >/dev/null && mpc stop || mpc play) || mpc toggle'
 end
