@@ -1,9 +1,9 @@
 # MoodeAudio Metadata on Waveshare 1.83-inch LCD
 Script for displaying coverart and some basic information (volume, state and mute) from MoodeAudio on Waveshare 1.83 inch lcd screen. Currently the script supports metadata from local files, radio streams, Spotify and Airplay. This script uses the library files and fonts that came with the Waveshare example (included in the `lib` folder). The original example can be found here: https://www.waveshare.com/wiki/1.83inch_LCD_Module.<br>
 
-<img src="https://github.com/user-attachments/assets/d196dd22-aabd-4242-a7ce-da621ec2eb97" style="width:300px; height:auto;"><br>
+<img src="https://github.com/user-attachments/assets/1791a220-fbe6-44a5-8e7e-45ba39645e05" style="width:300px; height:auto;"><br>
 
-<sub>The LCD showing volume overlay in an Argon One case and some Danish bricks.</sub><br>
+<sub>The LCD showing volume overlay in an Argon One case.</sub><br>
 
 ## Prerequisites
 Connect the screen according to the diagram below.
@@ -117,4 +117,4 @@ Enjoy!
 Note: Primarily for archival purposes, this repository also includes a lircrc file (`irexec.lircrc`) that maps the Argon One Remote to basic Moode commands (such as toggle, volume, next, previous, etc.). After downloading the Argon script and running`argonone-ir`, you can replace the existing script in `/etc/lirc/` with this one. If you don't own a Argon case and remote you can just ignore or delete the lircrc file. 
 <br>
 
-Note2: Also for archiving purposes, I included the bricklink studio file (`1.83inchLCDCasing.io`), which contains the design of the screen casing as shown in the image above.
+Note2: Also for archiving purposes, I included the ftl file (`LCDCasing.ftl`), which contains the design of the screen casing as shown in the image above.
