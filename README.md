@@ -117,4 +117,4 @@ Enjoy!
 Note: Primarily for archival purposes, this repository also includes a lircrc file (`irexec.lircrc`) that maps the Argon One Remote to basic Moode commands (such as toggle, volume, next, previous, etc.). After downloading the Argon script and running`argonone-ir`, you can replace the existing script in `/etc/lirc/` with this one. If you don't own a Argon case and remote you can just ignore or delete the lircrc file. 
 <br>
 
-Note2: Also for archiving purposes, I included the ftl file (`Argon One Waveshare 1.83 LCD.ftl`), which contains the design of the screen casing as shown in the image above.
+Note2: Also for archiving purposes, I included `Argon_one_waveshare_1.83LCD.ftl`, and `Argon_one_top.stl` for the screen casing as shown in the image above. `Argon_one_top.ftl` is based on https://www.thingiverse.com/thing:5268530.  
