@@ -93,7 +93,7 @@ def addCircle(imageWidth: int, imageHeight: int, image: Image.Image) -> Image.Im
     image.paste(circleLayer, mask=circleLayer)
     return image.convert("RGB")
 
-def drawOverlay(image: Image.Image, volume: str ="", state: str = "", mute: str="", shutdown: str="") -> Image.Image:
+def drawOverlay(image: Image.Image, volume: str ="", state: str = "", mute: str="", shutdown: bool = False) -> Image.Image:
     imageWidth, imageHeight = image.size[0], image.size[0] #center on the coverart,not the entire screen
     image=addCircle(imageWidth, imageHeight, image)
     Font = ImageFont.truetype("lib/Font02.ttf", 64)
