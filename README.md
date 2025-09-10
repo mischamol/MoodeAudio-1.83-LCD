@@ -3,7 +3,7 @@ Script for displaying coverart and some basic information (volume, state and mut
 
 <img src="https://github.com/user-attachments/assets/d258697a-e3ea-450f-969d-3c5b2cd47aeb" style="width:300px; height:auto;"><br>
 
-<sub>The LCD showing volume overlay in an Argon One case and some Danish bricks.</sub><br>
+<sub>The LCD in a 3d printed enclosure on an Argon One case showing volume overlay .</sub><br>
 
 ## Prerequisites
 Connect the screen according to the diagram below.
