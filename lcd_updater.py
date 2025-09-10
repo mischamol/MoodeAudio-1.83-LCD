@@ -104,7 +104,9 @@ def drawOverlay(image: Image.Image, volume: str ="", state: str = "", mute: str=
     return image
 
 def determineOverlay(disp: LCD_1inch83, screenImage: Image.Image, volume: str, state: str, mute: str, source: str) -> Image.Image:
-    if source not in ("Spotify Active", "AirPlay Active"):
+    if len(sys.argv) > 1 and sys.argv[1] == "shutdown":
+        screenImage = drawOverlay(screenImage, None, None, None, shutdown=True) 
+    elif source not in ("Spotify Active", "AirPlay Active"):
         previousVolume = getPreviousVolume()
         if volume != -1 and volume != previousVolume:
             volumeOverlay = drawOverlay(screenImage, volume, None, None, None)  #no state and mute, because they supersede volume
@@ -113,8 +115,6 @@ def determineOverlay(disp: LCD_1inch83, screenImage: Image.Image, volume: str, s
             setPreviousVolume(volume)
         if state in ("pause", "stop") or mute == "1":
             screenImage = drawOverlay(screenImage, None, state, mute, None)
-    if len(sys.argv) > 1 and sys.argv[1] == "shutdown":
-        screenImage = drawOverlay(screenImage, None, None, None, shutdown=True) 
     return screenImage
 
 try:
