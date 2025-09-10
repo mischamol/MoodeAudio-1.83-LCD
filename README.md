@@ -1,7 +1,7 @@
 # MoodeAudio Metadata on Waveshare 1.83-inch LCD
 Script for displaying coverart and some basic information (volume, state and mute) from MoodeAudio on Waveshare 1.83 inch lcd screen. Currently the script supports metadata from local files, radio streams, Spotify and Airplay. This script uses the library files and fonts that came with the Waveshare example (included in the `lib` folder). The original example can be found here: https://www.waveshare.com/wiki/1.83inch_LCD_Module.<br>
 
-<img src="https://github.com/user-attachments/assets/d196dd22-aabd-4242-a7ce-da621ec2eb97" style="width:300px; height:auto;"><br>
+<img src="https://github.com/user-attachments/assets/d258697a-e3ea-450f-969d-3c5b2cd47aeb" style="width:300px; height:auto;"><br>
 
 <sub>The LCD showing volume overlay in an Argon One case and some Danish bricks.</sub><br>
 
