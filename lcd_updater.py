@@ -93,11 +93,11 @@ def addCircle(imageWidth: int, imageHeight: int, image: Image.Image) -> Image.Im
     image.paste(circleLayer, mask=circleLayer)
     return image.convert("RGB")
 
-def drawOverlay(image: Image.Image, volume: str ="", state: str = "", mute: str="") -> Image.Image:
+def drawOverlay(image: Image.Image, volume: str ="", state: str = "", mute: str="", shutdown: str="") -> Image.Image:
     imageWidth, imageHeight = image.size[0], image.size[0] #center on the coverart,not the entire screen
     image=addCircle(imageWidth, imageHeight, image)
     Font = ImageFont.truetype("lib/Font02.ttf", 64)
-    text = "Mute" if mute == "1" else "||" if state == "pause" else "■" if state == "stop" else f"{volume}%"
+    text = ("Off" if shutdown else "Mute" if mute == "1" else "||" if state == "pause" else "■" if state == "stop" else f"{volume}%")
     textPosition = ((imageWidth - Font.getlength(text)) // 2, (imageHeight - Font.size) // 2)
     draw = ImageDraw.Draw(image)
     draw.text(textPosition, text, font=Font, fill=(255, 255, 255, 255))
@@ -107,12 +107,14 @@ def determineOverlay(disp: LCD_1inch83, screenImage: Image.Image, volume: str, s
     if source not in ("Spotify Active", "AirPlay Active"):
         previousVolume = getPreviousVolume()
         if volume != -1 and volume != previousVolume:
-            volumeOverlay = drawOverlay(screenImage, volume, None, None)  #no state and mute, because they supersede volume
+            volumeOverlay = drawOverlay(screenImage, volume, None, None, None)  #no state and mute, because they supersede volume
             disp.ShowImage(volumeOverlay)
             time.sleep(1)
             setPreviousVolume(volume)
         if state in ("pause", "stop") or mute == "1":
-            screenImage = drawOverlay(screenImage, None, state, mute)
+            screenImage = drawOverlay(screenImage, None, state, mute, None)
+    if len(sys.argv) > 1 and sys.argv[1] == "shutdown":
+        screenImage = drawOverlay(screenImage, None, None, None, shutdown=True) 
     return screenImage
 
 try:
