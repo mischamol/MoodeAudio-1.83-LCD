@@ -41,7 +41,7 @@ ExecStart=/usr/bin/python3 /home/username/lcd/lcd_updater.py
 ```
 [Unit]
 Description=Monitor spotmeta.txt and trigger spotwatcher service
-After=network.target
+After=local-fs.target
 
 [Path]
 PathModified=/var/local/www/spotmeta.txt
@@ -67,7 +67,7 @@ ExecStart=/usr/bin/python3 /home/username/lcd/lcd_updater.py
 ```
 [Unit]
 Description=Monitor aplmeta.txt and trigger aplwatcher service
-After=network.target
+After=local-fs.target
 
 [Path]
 PathModified=/var/local/www/aplmeta.txt
@@ -94,7 +94,7 @@ ExecStart=/usr/bin/python3 /home/username/lcd/lcd_updater.py
 ```
 [Unit]
 Description=Monitor currentsong.txt and trigger currentsong service
-After=network.target
+After=local-fs.target
 
 [Path]
 PathModified=/var/local/www/currentsong.txt
