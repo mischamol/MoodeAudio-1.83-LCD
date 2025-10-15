@@ -107,8 +107,8 @@ def read_pid_from_aplmeta():
 # Replace metadata line with a default entry + write PID line (keeps format stable)
 def write_default_metadata_with_pid(new_pid):
 	try:
-		default_cover_url = COVERS_WEB_ROOT + 'notfound.jpg'
-		default_metadata = '' + '~~~' + '' + 'airplay source' + '' + '~~~' + '0' + '~~~' + default_cover_url + '~~~' + 'ALAC/AAC'
+		default_cover_url = 'images/default-notfound-cover.jpg'
+		default_metadata = '' + '~~~' + 'Airplay Source' + '~~~' + '' + '~~~' + '0' + '~~~' + default_cover_url + '~~~' + 'ALAC/AAC' + '~~~' 
 		with open(APLMETA_FILE, 'w', encoding='utf-8') as f:
 			f.write(default_metadata + "\n")
 			f.write(f"PID={new_pid}\n")
@@ -185,7 +185,7 @@ try:
 				# Write metadata file
 				debug_msg('--> Write metadata file')
 				format = 'ALAC/AAC'
-				metadata = title + '~~~' + artist + '~~~' + album + '~~~' + duration + '~~~' + cover_url + '~~~' + format
+				metadata = title + '~~~' + artist + '~~~' + album + '~~~' + duration + '~~~' + cover_url + '~~~' + format + '~~~'
 				file = open(APLMETA_FILE, 'w')
 				file.write(metadata + "\n")
 				# also write PID (if known) as second line
