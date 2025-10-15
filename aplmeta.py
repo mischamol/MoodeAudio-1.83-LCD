@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+#copy to /var/www/util/aplmeta.py
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright 2014 The moOde audio player project / Tim Curtis
@@ -187,7 +188,7 @@ try:
 				metadata = title + '~~~' + artist + '~~~' + album + '~~~' + duration + '~~~' + cover_url + '~~~' + format
 				file = open(APLMETA_FILE, 'w')
 				file.write(metadata + "\n")
-				# also write PID (if known) as second line, without '#'
+				# also write PID (if known) as second line
 				if current_pid:
 					file.write(f"PID={current_pid}\n")
 				file.close()
