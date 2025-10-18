@@ -62,7 +62,7 @@ def roundImage(image: Image.Image, radius: float) -> Image.Image:
     return roundedImage.convert("RGB")
 
 def drawImage(image: Image.Image, song: str, artist: str)-> Image.Image:
-    image = image.resize((240, 240))
+    image.thumbnail((240, 240))
     image=roundImage(image, 40)
     image = ImageOps.pad(image, (240, 280), method=Image.Resampling.BILINEAR, color=(0, 0, 0), centering=(0.5, 0))
     draw = ImageDraw.Draw(image)
