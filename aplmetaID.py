@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+#copy to /var/www/util/aplmeta.py
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright 2014 The moOde audio player project / Tim Curtis
@@ -44,6 +45,10 @@ title = None
 album = None
 duration = '0'
 
+# --- track current Persistent ID ---
+current_pid = None
+# -----------------------------------------------------
+
 #
 # Functions
 #
@@ -79,6 +84,39 @@ def update_globals(key, val):
 	elif key == 'Track length':
 		duration = val
 
+# --- Persistent ID handling ---
+
+# Parse "Persistent ID: 0x...."
+def get_persistent_id(line):
+	match = re.match(r'^Persistent ID:\s*(0x[0-9a-fA-F]+)\.\s*$', line, flags=re.IGNORECASE)
+	return match.group(1) if match else None
+
+# Read PID from aplmeta.txt if present (expects a line "PID=0x...")
+def read_pid_from_aplmeta():
+	try:
+		if not os.path.exists(APLMETA_FILE):
+			return None
+		with open(APLMETA_FILE, 'r', encoding='utf-8') as f:
+			for ln in f:
+				if ln.startswith('PID='):
+					return ln.split('=', 1)[1].strip()
+	except Exception as e:
+		debug_msg(f"Could not read PID from {APLMETA_FILE}: {e}")
+	return None
+
+# Replace metadata line with a default entry + write PID line (keeps format stable)
+def write_default_metadata_with_pid(new_pid):
+	try:
+		default_cover_url = 'images/default-notfound-cover.jpg'
+		default_metadata = '' + '~~~' + 'Airplay Source' + '~~~' + '' + '~~~' + '0' + '~~~' + default_cover_url + '~~~' + 'ALAC/AAC' + '~~~' 
+		with open(APLMETA_FILE, 'w', encoding='utf-8') as f:
+			f.write(default_metadata + "\n")
+			f.write(f"PID={new_pid}\n")
+	except Exception as e:
+		debug_msg(f"Could not write default metadata to {APLMETA_FILE}: {e}")
+
+# ----------------------------------------------------
+
 #
 # Main
 #
@@ -91,12 +129,34 @@ if len(sys.argv) > 1:
 	else:
 		DEBUG = int(sys.argv[1])
 
+# --- initialize current_pid from file if available ---
+current_pid = read_pid_from_aplmeta()
+if current_pid:
+	debug_msg('--> PID loaded from aplmeta.txt: ' + current_pid)
+# ----------------------------------------------------------------------
+
 # Forever loop
 try:
 	while True:
 		line = sys.stdin.readline()
 		if DEBUG > 1:
 			debug_msg(line, '')
+
+		# --- handle Persistent ID detection and change ---
+		pid = get_persistent_id(line)
+		if pid:
+			debug_msg('--> persistent_id detected: ' + pid)
+			if current_pid and pid != current_pid:
+				# PID changed: replace metadata line with a default entry, update PID line
+				debug_msg('--> persistent_id changed: ' + current_pid + ' -> ' + pid)
+				write_default_metadata_with_pid(pid)
+				# Reset globals so new track metadata will be rebuilt
+				artist = None
+				title = None
+				album = None
+				duration = '0'
+			current_pid = pid
+		# ---------------------------------------------------------------
 
 		# Update specified globals
 		key, val = get_metadata(line)
@@ -105,10 +165,7 @@ try:
 			update_globals(key, val)
 
 		# When all globals are set, send metadata to front-end for display
-		if title:
-			album = album or 'Airplay Source'
-			artist = artist or ''
-
+		if artist and title and album:
 			# Get cover file:
 			# - Only one file will exist because retain_cover_art = "no"
 			# - We need a delay to allow shairport-sync time to write the file
@@ -128,9 +185,12 @@ try:
 				# Write metadata file
 				debug_msg('--> Write metadata file')
 				format = 'ALAC/AAC'
-				metadata = title + '~~~' + artist + '~~~' + album + '~~~' + duration + '~~~' + cover_url + '~~~' + format
+				metadata = title + '~~~' + artist + '~~~' + album + '~~~' + duration + '~~~' + cover_url + '~~~' + format + '~~~'
 				file = open(APLMETA_FILE, 'w')
 				file.write(metadata + "\n")
+				# also write PID (if known) as second line
+				if current_pid:
+					file.write(f"PID={current_pid}\n")
 				file.close()
 
 				# Send FE command
