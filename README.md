@@ -107,12 +107,13 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now currentsong.path
 ```
 
-To also include the 'off' overlay when shutdown is pressed we also need to patch `/etc/argon/argonpowerbutton.py` just above the shutdown command to  call `lcd_updater.py`. This can by done by hand or by running the folowing command (don't forget to change your homedir in both places)
+To also include the 'off' overlay when shutdown is pressed we also need to patch `/etc/argon/argonpowerbutton.py` just above the shutdown command in the `argonpowerbutton_monitor` function to  call `lcd_updater.py`. This can by done by hand or by running the folowing command (don't forget to change your homedir in both places)
 
 ```
 sudo bash -c "grep -q '/home/username/lcd/lcd_updater.py shutdown' /etc/argon/argonpowerbutton.py || \
-sed -i -E '0,/^([[:space:]]*)os\.system\([[:space:]]*(\"shutdown[^\"]*\"|\"systemctl[[:space:]]+poweroff[^\"]*\")\)/ s//\1os.system('\''\/usr\/bin\/python3 \/home\/username\/lcd\/lcd_updater.py shutdown'\'')\
+sed -i -E '/^([[:space:]]*)os\.system\([[:space:]]*\"shutdown[^\"]*\"\)/,\$ s//\1os.system('\''\/usr\/bin\/python3 \/home\/username\/lcd\/lcd_updater.py shutdown'\'')\
 &/' /etc/argon/argonpowerbutton.py"
+
 ```
 `sudo systemctl restart argononed.service`
 
