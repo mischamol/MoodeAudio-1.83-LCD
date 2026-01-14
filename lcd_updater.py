@@ -14,6 +14,7 @@ import urllib.parse
 from io import BytesIO
 import time
 import subprocess
+
 # Pin configuration and basic initialisation:
 RST = 27
 DC = 25
@@ -28,10 +29,11 @@ def getMetaData() -> tuple[str, str, str, str, str, str, str]:
     with open('/var/local/www/currentsong.txt', 'r') as file:
         data = dict(line.strip().split('=', 1) for line in file)
     source = data.get("file") 
+    volume = subprocess.check_output(["/var/www/util/vol.sh"],text=True).strip()
     if source in ("Spotify Active", "AirPlay Active"): # * below is to unpack the tuple
-        return (*getExternalMetadata(source), data.get("volume"), data.get("state"), source, data.get("mute"))
+        return (*getExternalMetadata(source), volume, data.get("state"), source, data.get("mute"))
     coverurl = "http://localhost/" + urllib.parse.unquote(data.get("coverurl")).lstrip('/') #stream starts with /, files not
-    return coverurl, data.get("title"), data.get("artist"), data.get("volume"), data.get("state"), source, data.get("mute")
+    return coverurl, data.get("title"), data.get("artist"), volume, data.get("state"), source, data.get("mute")
 
 def getExternalMetadata(source: str) -> tuple[str, str, str]:
     path = {"Spotify Active": "/var/local/www/spotmeta.txt", "AirPlay Active": "/var/local/www/aplmeta.txt"}[source]
@@ -78,7 +80,7 @@ def getPreviousVolume() -> str:
     except:
         return -1
 
-def setPreviousVolume(volume: str):
+def setPreviousVolume(volume: str ="0"):
     try:
         with open(VOLUME_CACHE_PATH, 'w') as f:
             f.write(volume)
@@ -93,7 +95,7 @@ def addCircle(imageWidth: int, imageHeight: int, image: Image.Image) -> Image.Im
     image.paste(circleLayer, mask=circleLayer)
     return image.convert("RGB")
 
-def drawOverlay(image: Image.Image, volume: str ="", state: str = "", mute: str="", shutdown: bool = False) -> Image.Image:
+def drawOverlay(image: Image.Image, volume: str, state: str = "", mute: str="", shutdown: bool = False) -> Image.Image:
     imageWidth, imageHeight = image.size[0], image.size[0] #center on the coverart,not the entire screen
     image=addCircle(imageWidth, imageHeight, image)
     Font = ImageFont.truetype("lib/Font02.ttf", 64)
@@ -108,11 +110,7 @@ def determineOverlay(disp: LCD_1inch83, screenImage: Image.Image, volume: str, s
         screenImage = drawOverlay(screenImage, None, None, None, shutdown=True) 
     #elif source not in ("Spotify Active", "AirPlay Active"):
     else:
-        if source in ("Spotify Active", "AirPlay Active"):
-            volume = subprocess.check_output(["/var/www/util/vol.sh"],text=True).strip()
-            print(volume)
         previousVolume = getPreviousVolume()
-        print(previousVolume)
         if volume != -1 and volume != previousVolume:
             volumeOverlay = drawOverlay(screenImage, volume, None, None, None)  #no state and mute, because they supersede volume
             disp.ShowImage(volumeOverlay)
