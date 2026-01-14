@@ -25,13 +25,13 @@ end
 begin
    prog = irexec
    button = KEY_VOLUMEUP
-   config = curl -G "http://localhost/command/index.php" -d "cmd=set_volume+-up+5"
+   config = /bin/bash -c "/var/www/util/vol.sh -up 5 && /usr/bin/python3 /home/mischa/lcd/lcd_updater.py"
 end
 
 begin
    prog = irexec
    button = KEY_VOLUMEDOWN
-   config = curl -G "http://localhost/command/index.php" -d "cmd=set_volume+-dn+5"
+   config = /bin/bash -c "/var/www/util/vol.sh -dn 5 && /usr/bin/python3 /home/mischa/lcd/lcd_updater.py"
 end
 
 begin

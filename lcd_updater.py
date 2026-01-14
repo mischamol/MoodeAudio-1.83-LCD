@@ -13,7 +13,7 @@ import requests
 import urllib.parse
 from io import BytesIO
 import time
-
+import subprocess
 # Pin configuration and basic initialisation:
 RST = 27
 DC = 25
@@ -106,8 +106,13 @@ def drawOverlay(image: Image.Image, volume: str ="", state: str = "", mute: str=
 def determineOverlay(disp: LCD_1inch83, screenImage: Image.Image, volume: str, state: str, mute: str, source: str) -> Image.Image:
     if len(sys.argv) > 1 and sys.argv[1] == "shutdown":
         screenImage = drawOverlay(screenImage, None, None, None, shutdown=True) 
-    elif source not in ("Spotify Active", "AirPlay Active"):
+    #elif source not in ("Spotify Active", "AirPlay Active"):
+    else:
+        if source in ("Spotify Active", "AirPlay Active"):
+            volume = subprocess.check_output(["/var/www/util/vol.sh"],text=True).strip()
+            print(volume)
         previousVolume = getPreviousVolume()
+        print(previousVolume)
         if volume != -1 and volume != previousVolume:
             volumeOverlay = drawOverlay(screenImage, volume, None, None, None)  #no state and mute, because they supersede volume
             disp.ShowImage(volumeOverlay)
