@@ -30,6 +30,8 @@ def getMetaData() -> tuple[str, str, str, str, str, str, str]:
     source = data.get("file") 
     if source in ("Spotify Active", "AirPlay Active"): # * below is to unpack the tuple
         return (*getExternalMetadata(source), data.get("volume"), data.get("state"), source, data.get("mute"))
+    elif source.startswith("alsa://"): #spdif input needs hardcoded image and text
+        return "http://localhost/imagesw/radio-logos/appletv.jpg", "","S/PDIF-input", data.get("volume"), data.get("state"), source, data.get("mute")
     coverurl = "http://localhost/" + urllib.parse.unquote(data.get("coverurl")).lstrip('/') #stream starts with /, files not
     return coverurl, data.get("title"), data.get("artist"), data.get("volume"), data.get("state"), source, data.get("mute")
 
