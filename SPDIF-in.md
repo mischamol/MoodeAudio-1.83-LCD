@@ -1,22 +1,27 @@
-# Howto add a nameless usb soundcard with spdif input to MoodeAudio
+# S/PDIF input to MoOdeAudio
+Because Apple Music is, for obvious reasons, not supported on MoOde, I needed a way to get audio from my Apple TV into CamillaDSP running on MoOde. Since I already had an S/PDIF signal coming from my TV, this seemed like a logical starting point. After some quick online searching in the usual places, I found a USB sound card with an S/PDIF input for about €9.
 
 ![images](https://github.com/user-attachments/assets/c7bf6416-f67d-4f25-b8a8-db5e39aed71a)
 
-This can be found for around €9,- on AliExpress Amazon and many other places
+Further searching led me to a very useful guide for the HiFiBerry Digi+ I/O:
 
+https://silvester.org.uk/2024/03/12/compact-disc-player-s-pdif-input-for-moode-audio-on-raspberry-pi/
 
-check your hardware
+After some fiddling around, I came up with the following steps to get everything working.
+
+1. Check your hardware
+
 `arecord -l`
-output will be something like this:
+
+The output will look something like this:
 ```
 **** List of CAPTURE Hardware Devices ****
 card 1: ICUSBAUDIO7D [ICUSBAUDIO7D], device 0: USB Audio [USB Audio]
   Subdevices: 0/1
   Subdevice #0: subdevice #0
 ```
-
-edit /etc/asound.conf (don't forget to edit hw:1,0,0 to your card, subdevice, subdevice settings as shown above)
-
+2.  Edit /etc/asound.conf 
+Don’t forget to adjust hw:1,0,0 to match your card, device, and subdevice numbers as shown above.
 `sudo nano /etc/asound.conf`
 
 ```
@@ -32,14 +37,16 @@ ctl.usb_spdif_in {
     card 1
 }
 ```
-
-Set amixer to use the SPDIF input instead of analog which is on the same channel
+3. Set amixer to use the S/PDIF input instead of the analog input on the same device and subdevices.
+   
 `amixer -c 1 set 'PCM Capture Source' 'IEC958 In'`
 `amixer -c 1 set 'IEC958 In' cap`
 
-Check
+4. Verify the setting
+
 `amixer -c 1 get 'PCM Capture Source'`
-Output should be something like:
+
+The output should be similar to:
 ```
 Simple mixer control 'PCM Capture Source',0
   Capabilities: enum
@@ -47,20 +54,22 @@ Simple mixer control 'PCM Capture Source',0
   Item0: 'IEC958 In'
 ```
 
-save
+5. Save the settings and reboot
+
 `sudo alsactl store`
 
 `sudo reboot`
 
-add a radio station with the folowing url:
+6. Add a radio station to MoOde using the following URL:
+   (Double-check the parameters for your setup.)
+   
 `alsa://hw:1,0?format=44100:16:2` (check parameters again)
 
 <img width="375" height="182" alt="Screenshot 2026-01-31 at 13 00 10" src="https://github.com/user-attachments/assets/c8c0473a-bd92-4be8-a8c9-e51b938c6a99" />
 
-Finally, as somehow moode does not accepts the manually uploaded logo as metadata, I copied `spdif.jpg` to my home folder and after that moved it to /var/local/www/imagesw/radio-logos/, and corrected the permissions
+Finally, because MoOde does not accept uploaded logos as metadata for this type of URL, I manually copied `spdif.jpg` to `/var/local/www/imagesw/radio-logos/` and adjusted the permissions:
 
-`scp spdif.jpg user@moode.local:/home/username/`
-`sudo mv /home/username/spdif.jpg /var/local/www/imagesw/radio-logos/`
+`sudo mv spdif.jpg /var/local/www/imagesw/radio-logos/`
 `sudo chown root:root spdif.jpg`
 `sudo chmod 777 spdig.jpg`
 
