@@ -57,3 +57,13 @@ add a radio station with the folowing url:
 
 <img width="375" height="182" alt="Screenshot 2026-01-31 at 13 00 10" src="https://github.com/user-attachments/assets/c8c0473a-bd92-4be8-a8c9-e51b938c6a99" />
 
+Finally, as somehow moode does not accepts the manually uploaded logo as metadata, I copied `spdif.jpg` to my home folder and after that moved it to /var/local/www/imagesw/radio-logos/, and corrected the permissions
+
+`scp spdif.jpg user@moode.local:/home/username/`
+`sudo mv /home/username/spdif.jpg /var/local/www/imagesw/radio-logos/`
+`sudo chown root:root spdif.jpg`
+`sudo chmod 777 spdig.jpg`
+
+
+
+
