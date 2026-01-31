@@ -1,4 +1,9 @@
-Howto add a nameless AliExpress usb soundcard with spdif input to moode
+# Howto add a nameless usb soundcard with spdif input to MoodeAudio
+
+![images](https://github.com/user-attachments/assets/c7bf6416-f67d-4f25-b8a8-db5e39aed71a)
+
+This can be found for around €9,- on AliExpress Amazon and many other places
+
 
 check your hardware
 `arecord -l`
@@ -10,7 +15,7 @@ card 1: ICUSBAUDIO7D [ICUSBAUDIO7D], device 0: USB Audio [USB Audio]
   Subdevice #0: subdevice #0
 ```
 
-edit asound.conf to listen to the right port (don't forget to edit hw:1,0,0 to your card, subdevice, subdevice settings as shown above)
+edit /etc/asound.conf (don't forget to edit hw:1,0,0 to your card, subdevice, subdevice settings as shown above)
 
 `sudo nano /etc/asound.conf`
 
@@ -28,7 +33,7 @@ ctl.usb_spdif_in {
 }
 ```
 
-Set amixer to use the SPDIF input instead of analog
+Set amixer to use the SPDIF input instead of analog which is on the same channel
 `amixer -c 1 set 'PCM Capture Source' 'IEC958 In'`
 `amixer -c 1 set 'IEC958 In' cap`
 
@@ -49,3 +54,6 @@ save
 
 add a radio station with the folowing url:
 `alsa://hw:1,0?format=44100:16:2` (check parameters again)
+
+<img width="375" height="182" alt="Screenshot 2026-01-31 at 13 00 10" src="https://github.com/user-attachments/assets/c8c0473a-bd92-4be8-a8c9-e51b938c6a99" />
+
