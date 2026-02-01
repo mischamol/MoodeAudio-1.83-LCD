@@ -22,8 +22,10 @@ card 1: ICUSBAUDIO7D [ICUSBAUDIO7D], device 0: USB Audio [USB Audio]
 ```
 Apparently, the input channel is located on card 1, subdevice 0, subdevice 0.
 
-To find out some more spec,type:
+To find out some more spec,type (change hw params accordig to your output above):
+
 `arecord -D hw:1,0,0 --dump-hw-params`
+
 Output should be something like this:
 ```
 Warning: Some sources (like microphones) may produce inaudible results
@@ -55,8 +57,9 @@ The input supports 16-bit, 2-channel audio at a sample rate of 44.1 kHz or 48 kH
 
 2. Set amixer to use the S/PDIF input instead of the analog input on the same device and subdevices.
    
-`amixer -c 1 set 'PCM Capture Source' 'IEC958 In'`
-`amixer -c 1 set 'IEC958 In' cap`
+`amixer -c 1 set 'PCM Capture Source' 'IEC958 In'`  -> selects the s/pdif (IEC958) input device for capture
+
+`amixer -c 1 set 'IEC958 In' cap`  -> enable capturing on s/pdif input
 
 3. Verify the setting
 
@@ -70,25 +73,27 @@ Simple mixer control 'PCM Capture Source',0
   Item0: 'IEC958 In'
 ```
 
+Check the last line to see if 'IEC958 In'  is selected
+
 4. Save the settings and reboot
 
 `sudo alsactl store`
 
 `sudo reboot`
 
-5. Add a radio station to MoOde using the following URL:
-   (Double-check the parameters for your setup.)
+5. Add a radio station to MoOde using the following URL (change the parameters to your situation):
    
-`alsa://hw:1,0?format=48000:16:2` (check parameters again). 
+`alsa://hw:1,0?format=48000:16:2` 
 
 <img width="477" height="182" alt="Screenshot 2026-02-01 at 13 53 56" src="https://github.com/user-attachments/assets/35d4d60f-58c0-44a6-876a-5bdc042a6cd8" />
 
 
 Finally, because MoOde does not accept uploaded logos as metadata for this type of URL, I manually copied `spdif.jpg` to `/var/local/www/imagesw/radio-logos/`, adjusted the permissions, and added an elif clause to the `getMetaData` function in `lcd_updater.py`.
-`sudo mv spdif.jpg /var/local/www/imagesw/radio-logos/`
-`sudo chown root:root spdif.jpg`
-`sudo chmod 777 spdig.jpg`
-
+```
+sudo mv spdif.jpg /var/local/www/imagesw/radio-logos/
+sudo chown root:root spdif.jpg
+sudo chmod 777 spdig.jpg
+```
 
 
 
