@@ -20,29 +20,45 @@ card 1: ICUSBAUDIO7D [ICUSBAUDIO7D], device 0: USB Audio [USB Audio]
   Subdevices: 0/1
   Subdevice #0: subdevice #0
 ```
-2.  Edit /etc/asound.conf 
-Don’t forget to adjust hw:1,0,0 to match your card, device, and subdevice numbers as shown above.
-`sudo nano /etc/asound.conf`
+Apparently, the input channel is located on card 1, subdevice 0, subdevice 0.
 
+To find out some more spec,type:
+`arecord -D hw:1,0,0 --dump-hw-params`
+Output should be something like this:
 ```
-pcm.usb_spdif_in {
-    type plug
-    slave {
-        pcm "hw:1,0,0"
-    }
-}
+Warning: Some sources (like microphones) may produce inaudible results
+         with 8-bit sampling. Use '-f' argument to increase resolution
+         e.g. '-f S16_LE'.
+HW Params of device "hw:1,0,0":
+--------------------
+ACCESS:  MMAP_INTERLEAVED RW_INTERLEAVED
+FORMAT:  S16_LE
+SUBFORMAT:  STD MSBITS_MAX
+SAMPLE_BITS: 16
+FRAME_BITS: 32
+CHANNELS: 2
+RATE: [44100 48000]
+PERIOD_TIME: [1000 1000000]
+PERIOD_SIZE: [45 48000]
+PERIOD_BYTES: [180 192000]
+PERIODS: [2 1024]
+BUFFER_TIME: [1875 2000000]
+BUFFER_SIZE: [90 96000]
+BUFFER_BYTES: [360 384000]
+TICK_TIME: ALL
+--------------------
+arecord: set_params:1387: Sample format non available
+Available formats:
+- S16_LE
+```
+The input supports 16-bit, 2-channel audio at a sample rate of 44.1 kHz or 48 kHz. For Apple TV, we need to use the latter.
 
-ctl.usb_spdif_in {
-    type hw
-    card 1
-}
-```
-3. Set amixer to use the S/PDIF input instead of the analog input on the same device and subdevices.
+2. Set amixer to use the S/PDIF input instead of the analog input on the same device and subdevices.
    
 `amixer -c 1 set 'PCM Capture Source' 'IEC958 In'`
 `amixer -c 1 set 'IEC958 In' cap`
 
-4. Verify the setting
+3. Verify the setting
 
 `amixer -c 1 get 'PCM Capture Source'`
 
@@ -54,21 +70,21 @@ Simple mixer control 'PCM Capture Source',0
   Item0: 'IEC958 In'
 ```
 
-5. Save the settings and reboot
+4. Save the settings and reboot
 
 `sudo alsactl store`
 
 `sudo reboot`
 
-6. Add a radio station to MoOde using the following URL:
+5. Add a radio station to MoOde using the following URL:
    (Double-check the parameters for your setup.)
    
-`alsa://hw:1,0?format=44100:16:2` (check parameters again)
+`alsa://hw:1,0?format=48000:16:2` (check parameters again). 
 
-<img width="375" height="182" alt="Screenshot 2026-01-31 at 13 00 10" src="https://github.com/user-attachments/assets/c8c0473a-bd92-4be8-a8c9-e51b938c6a99" />
+<img width="477" height="182" alt="Screenshot 2026-02-01 at 13 53 56" src="https://github.com/user-attachments/assets/35d4d60f-58c0-44a6-876a-5bdc042a6cd8" />
 
-Finally, because MoOde does not accept uploaded logos as metadata for this type of URL, I manually copied `spdif.jpg` to `/var/local/www/imagesw/radio-logos/` and adjusted the permissions:
 
+Finally, because MoOde does not accept uploaded logos as metadata for this type of URL, I manually copied `spdif.jpg` to `/var/local/www/imagesw/radio-logos/`, adjusted the permissions, and added an elif clause to the `getMetaData` function in `lcd_updater.py`.
 `sudo mv spdif.jpg /var/local/www/imagesw/radio-logos/`
 `sudo chown root:root spdif.jpg`
 `sudo chmod 777 spdig.jpg`
