@@ -92,7 +92,7 @@ Finally, because MoOde does not accept uploaded logos as metadata for this type 
 ```
 sudo mv spdif.jpg /var/local/www/imagesw/radio-logos/
 sudo chown root:root spdif.jpg
-sudo chmod 777 spdig.jpg
+sudo chmod 777 spdif.jpg
 ```
 
 
