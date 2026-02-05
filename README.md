@@ -12,8 +12,6 @@ Connect the screen according to the diagram below.
 
 Enable SPI: `sudo raspi-config` ➡ Interface Options ➡ enable SPI.
 
-Install the required library: `pip install RPi.GPIO`
-
 ## Installation
 You can place `lcd_updater.py` and the `lib` folder under `/var/local/www/commandw/` and enable the LCD updater in MoodeAudio under ➡ Configure ➡ Peripherals. 
 
