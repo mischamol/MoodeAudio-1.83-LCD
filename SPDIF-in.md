@@ -87,6 +87,8 @@ Check the last line to see if 'IEC958 In'  is selected
 
 <img width="477" height="182" alt="Screenshot 2026-02-01 at 13 53 56" src="https://github.com/user-attachments/assets/35d4d60f-58c0-44a6-876a-5bdc042a6cd8" />
 
+Alternatively, you can also force your AppleTV audio output to 16 bit in the settings. This also seems to change the rate to 44100 Hz (at least on my AppleTV HD). In this case parameters would be something like:
+`alsa://hw:1,0?format=44100:16:2` 
 
 Finally, because MoOde does not accept uploaded logos as metadata for this type of URL, I manually copied `spdif.jpg` to `/var/local/www/imagesw/radio-logos/`, adjusted the permissions, and added an elif clause to the `getMetaData` function in `lcd_updater.py`.
 ```
