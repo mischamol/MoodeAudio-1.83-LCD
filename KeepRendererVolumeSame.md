@@ -47,7 +47,6 @@ sudo chmod +x /var/local/www/commandw/aplvol2moode.sh
 After that, edit `/etc/shairport-sync.conf` so Shairport Sync calls the script whenever the AirPlay volume changes.
 
 ```bash
-sudo cp /etc/shairport-sync.conf /etc/shairport-sync.conf.bak.airplay-volume-hook && \
 sudo sed -i -E 's|^[[:space:]]*(//[[:space:]]*)?run_this_when_volume_is_set[[:space:]]*=.*;|run_this_when_volume_is_set = "/var/local/www/commandw/aplvol2moode.sh";|' /etc/shairport-sync.conf && \
 sudo systemctl restart shairport-sync
 ```
