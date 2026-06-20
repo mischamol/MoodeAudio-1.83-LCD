@@ -12,7 +12,6 @@ To make Shairport Sync ignore AirPlay volume control, run:
 
 ```bash
 sudo sed -i -E 's|^[[:space:]]*(//[[:space:]]*)?ignore_volume_control[[:space:]]*=.*;|ignore_volume_control = "yes";|' /etc/shairport-sync.conf && \
-sudo sed -i -E 's|^[[:space:]]*(//[[:space:]]*)?default_airplay_volume[[:space:]]*=.*;|default_airplay_volume = 0.0;|' /etc/shairport-sync.conf && \
 sudo systemctl restart shairport-sync
 ```
 
