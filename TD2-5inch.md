@@ -1,4 +1,5 @@
 I also added a 5 inch raspberry pi touch display 2. To increase the scaling I added the following to `~/.xinitrc` in the part where chromium is being started
+<img width="3623" height="2434" alt="image" src="https://github.com/user-attachments/assets/1dcdb9c9-299d-433e-81a4-137052edf8eb" />
 
 Portrait mode
 ```
