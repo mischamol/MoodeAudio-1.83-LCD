@@ -1,0 +1,57 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+mac=${1:-70:48:0F:F2:65:99}
+
+case "$mac" in
+    ??\:??\:??\:??\:??\:??) ;;
+    *) echo "Usage: sudo ./install.sh [AA:BB:CC:DD:EE:FF]" >&2; exit 2 ;;
+esac
+
+install -o root -g root -m 0755 "$script_dir/siri_remote_moode.py" /usr/local/sbin/siri_remote_moode.py
+install -o root -g root -m 0644 "$script_dir/siri-remote-moode.service" /etc/systemd/system/siri-remote-moode.service
+
+if [ ! -e /etc/default/siri-remote-moode ]; then
+    install -o root -g root -m 0644 "$script_dir/siri-remote-moode.env" /etc/default/siri-remote-moode
+fi
+sed -i "s/^SIRI_REMOTE_MAC=.*/SIRI_REMOTE_MAC=$mac/" /etc/default/siri-remote-moode
+# Migrate the old package defaults without overwriting custom commands.
+sed -i 's/^MOODE_VOLUME_UP_CMD=set_volume -up 2$/MOODE_VOLUME_UP_CMD=set_volume -up 5/' /etc/default/siri-remote-moode
+sed -i 's/^MOODE_VOLUME_DOWN_CMD=set_volume -dn 2$/MOODE_VOLUME_DOWN_CMD=set_volume -dn 5/' /etc/default/siri-remote-moode
+grep -q '^MOODE_PREVIOUS_CMD=' /etc/default/siri-remote-moode || printf '%s\n' 'MOODE_PREVIOUS_CMD=previous' >> /etc/default/siri-remote-moode
+grep -q '^MOODE_NEXT_CMD=' /etc/default/siri-remote-moode || printf '%s\n' 'MOODE_NEXT_CMD=next' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_TOUCH_X_SPLIT=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_TOUCH_X_SPLIT=3096' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_TOUCH_DEAD_ZONE=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_TOUCH_DEAD_ZONE=60' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_TOUCH_MAX_AGE_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_TOUCH_MAX_AGE_SECONDS=1.5' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_HOME_BUTTON_MASK=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_HOME_BUTTON_MASK=0x01' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_HOME_HOLD_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_HOME_HOLD_SECONDS=3' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_HOME_COMMAND=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_HOME_COMMAND=/usr/bin/systemctl poweroff' >> /etc/default/siri-remote-moode
+# Local display click for Menu/Back. Determine the uid 1000 home directory so
+# the package does not assume that the moOde account is named pi or mischa.
+display_home=$(getent passwd 1000 | cut -d: -f6)
+[ -n "$display_home" ] || display_home=/home/pi
+grep -q '^SIRI_MENU_SCREEN_CLICK=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_MENU_SCREEN_CLICK=yes' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_X_DISPLAY=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_X_DISPLAY=:0' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_XAUTHORITY=' /etc/default/siri-remote-moode || printf 'SIRI_XAUTHORITY=%s/.Xauthority\n' "$display_home" >> /etc/default/siri-remote-moode
+sed -i "s|^SIRI_XAUTHORITY=/home/[^/]*/.Xauthority$|SIRI_XAUTHORITY=$display_home/.Xauthority|" /etc/default/siri-remote-moode
+# Remove obsolete fixed metadata coordinates from older package versions. The
+# Python daemon now calculates a safe point inside the cover-art link.
+sed -i '/^SIRI_MENU_CLICK_X=/d; /^SIRI_MENU_CLICK_Y=/d' /etc/default/siri-remote-moode
+sed -i 's/^SIRI_ATT_MTU=104$/SIRI_ATT_MTU=23/' /etc/default/siri-remote-moode
+grep -q '^SIRI_ATT_MTU=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_ATT_MTU=23' >> /etc/default/siri-remote-moode
+sed -i 's/^SIRI_KEEPALIVE_SECONDS=.*/SIRI_KEEPALIVE_SECONDS=0/' /etc/default/siri-remote-moode
+grep -q '^SIRI_KEEPALIVE_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_KEEPALIVE_SECONDS=0' >> /etc/default/siri-remote-moode
+sed -i 's/^SIRI_SECURITY=.*/SIRI_SECURITY=medium/' /etc/default/siri-remote-moode
+sed -i 's/^RECONNECT_MIN=.*/RECONNECT_MIN=0.2/' /etc/default/siri-remote-moode
+sed -i 's/^RECONNECT_MAX=.*/RECONNECT_MAX=1/' /etc/default/siri-remote-moode
+grep -q '^SIRI_RECLAIM_BUSY=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_RECLAIM_BUSY=yes' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_DEBUG=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_DEBUG=no' >> /etc/default/siri-remote-moode
+
+systemctl daemon-reload
+systemctl enable siri-remote-moode.service
+# Explicit restart is required for upgrades: "enable --now" starts a stopped
+# service but does not replace an already running daemon process.
+systemctl restart siri-remote-moode.service
+
+echo "Installed. Follow logs with: journalctl -u siri-remote-moode -f"
