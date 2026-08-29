@@ -30,6 +30,59 @@ import urllib.request
 
 LOG = logging.getLogger("siri-remote-moode")
 
+
+class XSetWindowAttributes(ctypes.Structure):
+    _fields_ = [
+        ("background_pixmap", ctypes.c_ulong),
+        ("background_pixel", ctypes.c_ulong),
+        ("border_pixmap", ctypes.c_ulong),
+        ("border_pixel", ctypes.c_ulong),
+        ("bit_gravity", ctypes.c_int),
+        ("win_gravity", ctypes.c_int),
+        ("backing_store", ctypes.c_int),
+        ("backing_planes", ctypes.c_ulong),
+        ("backing_pixel", ctypes.c_ulong),
+        ("save_under", ctypes.c_int),
+        ("event_mask", ctypes.c_long),
+        ("do_not_propagate_mask", ctypes.c_long),
+        ("override_redirect", ctypes.c_int),
+        ("colormap", ctypes.c_ulong),
+        ("cursor", ctypes.c_ulong),
+    ]
+
+
+class CairoTextExtents(ctypes.Structure):
+    _fields_ = [
+        ("x_bearing", ctypes.c_double),
+        ("y_bearing", ctypes.c_double),
+        ("width", ctypes.c_double),
+        ("height", ctypes.c_double),
+        ("x_advance", ctypes.c_double),
+        ("y_advance", ctypes.c_double),
+    ]
+
+
+class XImage(ctypes.Structure):
+    """Initial, stable portion of Xlib's XImage structure."""
+
+    _fields_ = [
+        ("width", ctypes.c_int),
+        ("height", ctypes.c_int),
+        ("xoffset", ctypes.c_int),
+        ("format", ctypes.c_int),
+        ("data", ctypes.c_void_p),
+        ("byte_order", ctypes.c_int),
+        ("bitmap_unit", ctypes.c_int),
+        ("bitmap_bit_order", ctypes.c_int),
+        ("bitmap_pad", ctypes.c_int),
+        ("depth", ctypes.c_int),
+        ("bytes_per_line", ctypes.c_int),
+        ("bits_per_pixel", ctypes.c_int),
+        ("red_mask", ctypes.c_ulong),
+        ("green_mask", ctypes.c_ulong),
+        ("blue_mask", ctypes.c_ulong),
+    ]
+
 AF_BLUETOOTH = 31
 SOCK_SEQPACKET = 5
 BTPROTO_L2CAP = 0
@@ -144,6 +197,8 @@ class RawAttClient:
         self.security_level = {"low": 1, "medium": 2, "high": 3, "fips": 4}[security]
         self.sock: socket.socket | None = None
         self.notification_handler = None
+        self.battery_handler = None
+        self.battery_is_low = False
 
     def connect(self) -> None:
         libc = ctypes.CDLL(None, use_errno=True)
@@ -278,15 +333,46 @@ class RawAttClient:
         LOG.info("Activating input: writing AF to 0x001d")
         self.write_request(HANDLE_INPUT_ENABLE, b"\xAF")
 
-    def receive_forever(self, stop_event: threading.Event, keepalive_seconds: float) -> None:
+    def read_battery(self, source: str = "Battery") -> int | None:
+        value = self.read_request(HANDLE_BATTERY_VALUE)
+        if not value:
+            return None
+        level = value[0]
+        LOG.debug("%s; battery=%d%%", source, level)
+        if self.battery_handler is not None:
+            result = self.battery_handler(level)
+            if isinstance(result, bool):
+                self.battery_is_low = result
+        return level
+
+    def receive_forever(
+        self,
+        stop_event: threading.Event,
+        keepalive_seconds: float,
+        battery_check_seconds: float = 0,
+        battery_low_check_seconds: float = 0,
+    ) -> None:
         next_keepalive = (
             time.monotonic() + keepalive_seconds if keepalive_seconds > 0 else None
         )
+        initial_battery_interval = (
+            battery_low_check_seconds
+            if self.battery_is_low and battery_low_check_seconds > 0
+            else battery_check_seconds
+        )
+        next_battery_check = (
+            time.monotonic() + initial_battery_interval
+            if battery_check_seconds > 0 else None
+        )
         while not stop_event.is_set():
-            wait_seconds = (
-                max(0.05, min(1.0, next_keepalive - time.monotonic()))
-                if next_keepalive is not None else 1.0
-            )
+            deadlines = [
+                deadline for deadline in (next_keepalive, next_battery_check)
+                if deadline is not None
+            ]
+            wait_seconds = max(
+                0.05,
+                min(1.0, min(deadlines) - time.monotonic()),
+            ) if deadlines else 1.0
             try:
                 packet = self._receive(wait_seconds)
             except socket.timeout:
@@ -294,17 +380,33 @@ class RawAttClient:
             if packet is not None and not self._dispatch_async(packet):
                 LOG.debug("Ignoring ATT packet: %s", packet.hex(" "))
             if next_keepalive is not None and time.monotonic() >= next_keepalive:
-                battery = self.read_request(HANDLE_BATTERY_VALUE)
-                if battery:
-                    LOG.debug("Keepalive; battery=%d%%", battery[0])
+                self.read_battery("Keepalive")
                 next_keepalive = time.monotonic() + keepalive_seconds
+            if (
+                next_battery_check is not None
+                and time.monotonic() >= next_battery_check
+            ):
+                self.read_battery("Periodic check")
+                interval = (
+                    battery_low_check_seconds
+                    if self.battery_is_low and battery_low_check_seconds > 0
+                    else battery_check_seconds
+                )
+                next_battery_check = time.monotonic() + interval
 
 
 class MoodeWorker:
-    def __init__(self, base_url: str, timeout: float, dry_run: bool = False) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float,
+        dry_run: bool = False,
+        result_handler=None,
+    ) -> None:
         self.base_url = base_url
         self.timeout = timeout
         self.dry_run = dry_run
+        self.result_handler = result_handler
         self.commands: queue.Queue[tuple[str, str] | None] = queue.Queue(maxsize=32)
         self.thread = threading.Thread(target=self._run, name="moode-http", daemon=True)
 
@@ -344,10 +446,12 @@ class MoodeWorker:
             )
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                    response.read(4096)
+                    body = response.read(4096)
                     if not 200 <= response.status < 300:
                         raise RuntimeError(f"HTTP {response.status}")
                 LOG.info("%s -> %s", button_name, command)
+                if self.result_handler is not None:
+                    self.result_handler(button_name, command, body)
             except (OSError, urllib.error.URLError, RuntimeError) as exc:
                 # Do not retry toggle commands: if the response was lost after
                 # execution, a retry could immediately undo the first command.
@@ -522,15 +626,828 @@ class X11ClickWorker:
                 LOG.error("Menu/Back X11 click failed: %s", exc)
 
 
+class X11Overlay:
+    """Temporary fake-alpha X11 OSD that does not require a compositor."""
+
+    CW_OVERRIDE_REDIRECT = 1 << 9
+    ZPIXMAP = 2
+    MOODE_GREY = 0x808080
+    MOODE_TEXT = (240 / 255.0, 240 / 255.0, 240 / 255.0)
+    SYMBOLS = {"PLAY", "PAUSE", "NEXT", "PREVIOUS", "BATTERY"}
+    FONT_5X7 = {
+        " ": ("00000",) * 7,
+        "0": ("01110", "10001", "10011", "10101", "11001", "10001", "01110"),
+        "1": ("00100", "01100", "00100", "00100", "00100", "00100", "01110"),
+        "2": ("01110", "10001", "00001", "00010", "00100", "01000", "11111"),
+        "3": ("11110", "00001", "00001", "01110", "00001", "00001", "11110"),
+        "4": ("00010", "00110", "01010", "10010", "11111", "00010", "00010"),
+        "5": ("11111", "10000", "10000", "11110", "00001", "00001", "11110"),
+        "6": ("01110", "10000", "10000", "11110", "10001", "10001", "01110"),
+        "7": ("11111", "00001", "00010", "00100", "01000", "01000", "01000"),
+        "8": ("01110", "10001", "10001", "01110", "10001", "10001", "01110"),
+        "9": ("01110", "10001", "10001", "01111", "00001", "00001", "01110"),
+        "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
+        "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
+        "L": ("10000", "10000", "10000", "10000", "10000", "10000", "11111"),
+        "M": ("10001", "11011", "10101", "10101", "10001", "10001", "10001"),
+        "O": ("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
+        "P": ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
+        "S": ("01111", "10000", "10000", "01110", "00001", "00001", "11110"),
+        "T": ("11111", "00100", "00100", "00100", "00100", "00100", "00100"),
+        "U": ("10001", "10001", "10001", "10001", "10001", "10001", "01110"),
+        "V": ("10001", "10001", "10001", "10001", "10001", "01010", "00100"),
+        "+": ("00000", "00100", "00100", "11111", "00100", "00100", "00000"),
+        "-": ("00000", "00000", "00000", "11111", "00000", "00000", "00000"),
+        "%": ("11001", "11010", "00100", "01000", "10110", "00110", "00000"),
+        "?": ("01110", "10001", "00001", "00010", "00100", "00000", "00100"),
+    }
+    def __init__(self) -> None:
+        self.display_name = env("SIRI_X_DISPLAY", ":0")
+        self.xauthority = env("SIRI_XAUTHORITY", "/home/mischa/.Xauthority")
+
+    @staticmethod
+    def _load_x11() -> ctypes.CDLL:
+        x11 = ctypes.CDLL("libX11.so.6")
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XDefaultScreen.argtypes = [ctypes.c_void_p]
+        x11.XDefaultScreen.restype = ctypes.c_int
+        x11.XDisplayWidth.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        x11.XDisplayWidth.restype = ctypes.c_int
+        x11.XDisplayHeight.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        x11.XDisplayHeight.restype = ctypes.c_int
+        x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+        x11.XDefaultRootWindow.restype = ctypes.c_ulong
+        x11.XDefaultVisual.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        x11.XDefaultVisual.restype = ctypes.c_void_p
+        x11.XGetImage.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int,
+            ctypes.c_uint, ctypes.c_uint, ctypes.c_ulong, ctypes.c_int,
+        ]
+        x11.XGetImage.restype = ctypes.c_void_p
+        x11.XGetPixel.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+        x11.XGetPixel.restype = ctypes.c_ulong
+        x11.XPutPixel.argtypes = [
+            ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_ulong,
+        ]
+        x11.XCreateSimpleWindow.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int,
+            ctypes.c_uint, ctypes.c_uint, ctypes.c_uint,
+            ctypes.c_ulong, ctypes.c_ulong,
+        ]
+        x11.XCreateSimpleWindow.restype = ctypes.c_ulong
+        x11.XChangeWindowAttributes.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong,
+            ctypes.POINTER(XSetWindowAttributes),
+        ]
+        x11.XMapRaised.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        x11.XCreateGC.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p,
+        ]
+        x11.XCreateGC.restype = ctypes.c_void_p
+        x11.XPutImage.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.c_void_p, ctypes.c_void_p,
+            ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.c_uint, ctypes.c_uint,
+        ]
+        x11.XSetForeground.argtypes = [
+            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_ulong,
+        ]
+        x11.XFillRectangle.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.c_void_p,
+            ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint,
+        ]
+        x11.XFlush.argtypes = [ctypes.c_void_p]
+        x11.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        x11.XFreeGC.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        x11.XDestroyImage.argtypes = [ctypes.c_void_p]
+        x11.XDestroyWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        return x11
+
+    @staticmethod
+    def _load_cairo() -> ctypes.CDLL:
+        cairo = ctypes.CDLL("libcairo.so.2")
+        cairo.cairo_xlib_surface_create.argtypes = [
+            ctypes.c_void_p, ctypes.c_ulong, ctypes.c_void_p,
+            ctypes.c_int, ctypes.c_int,
+        ]
+        cairo.cairo_xlib_surface_create.restype = ctypes.c_void_p
+        cairo.cairo_surface_destroy.argtypes = [ctypes.c_void_p]
+        cairo.cairo_surface_flush.argtypes = [ctypes.c_void_p]
+        cairo.cairo_image_surface_create_for_data.argtypes = [
+            ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+            ctypes.c_int, ctypes.c_int,
+        ]
+        cairo.cairo_image_surface_create_for_data.restype = ctypes.c_void_p
+        cairo.cairo_create.argtypes = [ctypes.c_void_p]
+        cairo.cairo_create.restype = ctypes.c_void_p
+        cairo.cairo_destroy.argtypes = [ctypes.c_void_p]
+        cairo.cairo_select_font_face.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int,
+        ]
+        cairo.cairo_set_font_size.argtypes = [ctypes.c_void_p, ctypes.c_double]
+        cairo.cairo_text_extents.argtypes = [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(CairoTextExtents),
+        ]
+        cairo.cairo_set_source_rgb.argtypes = [
+            ctypes.c_void_p, ctypes.c_double, ctypes.c_double, ctypes.c_double,
+        ]
+        cairo.cairo_set_source_rgba.argtypes = [
+            ctypes.c_void_p, ctypes.c_double, ctypes.c_double,
+            ctypes.c_double, ctypes.c_double,
+        ]
+        cairo.cairo_move_to.argtypes = [
+            ctypes.c_void_p, ctypes.c_double, ctypes.c_double,
+        ]
+        cairo.cairo_show_text.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        cairo.cairo_new_path.argtypes = [ctypes.c_void_p]
+        cairo.cairo_line_to.argtypes = [
+            ctypes.c_void_p, ctypes.c_double, ctypes.c_double,
+        ]
+        cairo.cairo_close_path.argtypes = [ctypes.c_void_p]
+        cairo.cairo_fill.argtypes = [ctypes.c_void_p]
+        cairo.cairo_arc.argtypes = [
+            ctypes.c_void_p, ctypes.c_double, ctypes.c_double,
+            ctypes.c_double, ctypes.c_double, ctypes.c_double,
+        ]
+        cairo.cairo_set_line_width.argtypes = [ctypes.c_void_p, ctypes.c_double]
+        cairo.cairo_stroke.argtypes = [ctypes.c_void_p]
+        return cairo
+
+    @staticmethod
+    def _make_input_transparent(display: int, window: int) -> None:
+        """Give the overlay an empty X11 input shape so clicks pass through."""
+        try:
+            xext = ctypes.CDLL("libXext.so.6")
+            xext.XShapeCombineRectangles.argtypes = [
+                ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int,
+                ctypes.c_int, ctypes.c_int, ctypes.c_void_p,
+                ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ]
+            # ShapeInput=2, ShapeSet=0, Unsorted=0, zero rectangles.
+            xext.XShapeCombineRectangles(
+                display, window, 2, 0, 0, None, 0, 0, 0,
+            )
+        except OSError as exc:
+            LOG.warning("Cannot make X11 overlay click-through: %s", exc)
+
+    @staticmethod
+    def _darken_pixel(pixel: int, retained: float = 0.34) -> int:
+        blue = int((pixel & 0xFF) * retained)
+        green = int(((pixel >> 8) & 0xFF) * retained)
+        red = int(((pixel >> 16) & 0xFF) * retained)
+        return (red << 16) | (green << 8) | blue
+
+    @staticmethod
+    def _blend_pixel(pixel: int, tint: int, opacity: float) -> int:
+        retained = 1.0 - opacity
+        blue = int((pixel & 0xFF) * retained + (tint & 0xFF) * opacity)
+        green = int(
+            ((pixel >> 8) & 0xFF) * retained
+            + ((tint >> 8) & 0xFF) * opacity
+        )
+        red = int(
+            ((pixel >> 16) & 0xFF) * retained
+            + ((tint >> 16) & 0xFF) * opacity
+        )
+        return (red << 16) | (green << 8) | blue
+
+    @classmethod
+    def _text_layout(cls, text: str, size: int) -> tuple[str, int, int, int]:
+        clean = "".join(ch if ch in cls.FONT_5X7 else "?" for ch in text.upper())[:12]
+        scale = max(5, min(24, (size - 48) // max(1, len(clean) * 6 - 1)))
+        width = max(0, (len(clean) * 6 - 1) * scale)
+        height = 7 * scale
+        return clean, scale, width, height
+
+    @staticmethod
+    def _overlay_geometry(width: int, height: int) -> tuple[int, int, int]:
+        if width <= 0 or height <= 0:
+            raise RuntimeError("invalid X11 display dimensions")
+        # moOde's portrait cover is centered horizontally near the top and is
+        # about 80% of the 720-pixel viewport width. Keep the circle just
+        # inside that artwork and align both centers.
+        size = max(280, min(536, int(width * 0.745), height - 24))
+        left = (width - size) // 2
+        cover_center_y = int(height * 0.295)
+        top = max(12, min(height - size - 12, cover_center_y - size // 2))
+        return size, left, top
+
+    @classmethod
+    def _draw_text(
+        cls, x11: ctypes.CDLL, display: int, window: int, gc: int,
+        text: str, size: int,
+    ) -> None:
+        clean, scale, text_width, text_height = cls._text_layout(text, size)
+        start_x = (size - text_width) // 2
+        start_y = (size - text_height) // 2
+        for char_index, char in enumerate(clean):
+            glyph = cls.FONT_5X7[char]
+            char_x = start_x + char_index * 6 * scale
+            for row, pattern in enumerate(glyph):
+                for column, bit in enumerate(pattern):
+                    if bit == "1":
+                        x11.XFillRectangle(
+                            display, window, gc,
+                            char_x + column * scale,
+                            start_y + row * scale,
+                            scale, scale,
+                        )
+
+    @classmethod
+    def _draw_lato_text(
+        cls, x11: ctypes.CDLL, display: int, screen: int,
+        window: int, text: str, size: int,
+    ) -> None:
+        cairo = cls._load_cairo()
+        visual = x11.XDefaultVisual(display, screen)
+        surface = cairo.cairo_xlib_surface_create(
+            display, window, visual, size, size,
+        )
+        if not surface:
+            raise RuntimeError("could not create Cairo Xlib surface")
+        context = cairo.cairo_create(surface)
+        if not context:
+            cairo.cairo_surface_destroy(surface)
+            raise RuntimeError("could not create Cairo drawing context")
+
+        def centered(
+            label: str,
+            font_size: float,
+            center_y: float,
+            bold: bool = False,
+            center_x: float | None = None,
+        ) -> None:
+            encoded = label.encode("ascii", "replace")
+            cairo.cairo_select_font_face(context, b"Lato", 0, 1 if bold else 0)
+            cairo.cairo_set_font_size(context, font_size)
+            extents = CairoTextExtents()
+            cairo.cairo_text_extents(context, encoded, ctypes.byref(extents))
+            horizontal_center = size / 2.0 if center_x is None else center_x
+            text_x = horizontal_center - extents.width / 2.0 - extents.x_bearing
+            text_y = center_y - extents.height / 2.0 - extents.y_bearing
+            cairo.cairo_move_to(context, text_x, text_y)
+            cairo.cairo_show_text(context, encoded)
+
+        def text_width(label: str, font_size: float, bold: bool = False) -> float:
+            encoded = label.encode("ascii", "replace")
+            cairo.cairo_select_font_face(context, b"Lato", 0, 1 if bold else 0)
+            cairo.cairo_set_font_size(context, font_size)
+            extents = CairoTextExtents()
+            cairo.cairo_text_extents(context, encoded, ctypes.byref(extents))
+            return extents.width
+
+        def polygon(points: list[tuple[float, float]]) -> None:
+            cairo.cairo_new_path(context)
+            cairo.cairo_move_to(context, *points[0])
+            for point in points[1:]:
+                cairo.cairo_line_to(context, *point)
+            cairo.cairo_close_path(context)
+            cairo.cairo_fill(context)
+
+        def power_ring(center_y: float, digit: str | None = None) -> None:
+            cairo.cairo_set_line_width(context, size * 0.026)
+            cairo.cairo_new_path(context)
+            cairo.cairo_arc(
+                context, size * 0.50, size * center_y, size * 0.19,
+                5.45, 10.55,
+            )
+            cairo.cairo_stroke(context)
+            cairo.cairo_new_path(context)
+            cairo.cairo_move_to(context, size * 0.50, size * (center_y - 0.24))
+            cairo.cairo_line_to(context, size * 0.50, size * (center_y - 0.11))
+            cairo.cairo_stroke(context)
+            if digit is not None:
+                centered(
+                    digit, size * 0.285, size * (center_y + 0.035), bold=True,
+                )
+
+        try:
+            cairo.cairo_set_source_rgb(context, *cls.MOODE_TEXT)
+            if text == "PLAY":
+                polygon([
+                    (size * 0.39, size * 0.31),
+                    (size * 0.70, size * 0.50),
+                    (size * 0.39, size * 0.69),
+                ])
+            elif text == "PAUSE":
+                polygon([
+                    (size * 0.36, size * 0.31),
+                    (size * 0.45, size * 0.31),
+                    (size * 0.45, size * 0.69),
+                    (size * 0.36, size * 0.69),
+                ])
+                polygon([
+                    (size * 0.55, size * 0.31),
+                    (size * 0.64, size * 0.31),
+                    (size * 0.64, size * 0.69),
+                    (size * 0.55, size * 0.69),
+                ])
+            elif text == "NEXT":
+                polygon([
+                    (size * 0.32, size * 0.31),
+                    (size * 0.63, size * 0.50),
+                    (size * 0.32, size * 0.69),
+                ])
+                polygon([
+                    (size * 0.64, size * 0.31),
+                    (size * 0.70, size * 0.31),
+                    (size * 0.70, size * 0.69),
+                    (size * 0.64, size * 0.69),
+                ])
+            elif text == "PREVIOUS":
+                polygon([
+                    (size * 0.68, size * 0.31),
+                    (size * 0.37, size * 0.50),
+                    (size * 0.68, size * 0.69),
+                ])
+                polygon([
+                    (size * 0.30, size * 0.31),
+                    (size * 0.36, size * 0.31),
+                    (size * 0.36, size * 0.69),
+                    (size * 0.30, size * 0.69),
+                ])
+            elif text.startswith("BATTERY:"):
+                percentage = text.partition(":")[2]
+                cairo.cairo_set_line_width(context, size * 0.026)
+                cairo.cairo_new_path(context)
+                cairo.cairo_move_to(context, size * 0.27, size * 0.37)
+                cairo.cairo_line_to(context, size * 0.68, size * 0.37)
+                cairo.cairo_line_to(context, size * 0.68, size * 0.63)
+                cairo.cairo_line_to(context, size * 0.27, size * 0.63)
+                cairo.cairo_close_path(context)
+                cairo.cairo_stroke(context)
+                polygon([
+                    (size * 0.69, size * 0.44),
+                    (size * 0.75, size * 0.44),
+                    (size * 0.75, size * 0.56),
+                    (size * 0.69, size * 0.56),
+                ])
+                centered(
+                    percentage,
+                    size * 0.14,
+                    size * 0.50,
+                    bold=True,
+                    center_x=size * 0.475,
+                )
+            elif text.startswith("VOLUME:"):
+                percentage = text.partition(":")[2]
+                percentage_size = size * 0.285
+                target_width = text_width(percentage, percentage_size, bold=True)
+                label_width = text_width("Volume:", percentage_size, bold=True)
+                label_size = percentage_size * target_width / label_width
+                centered("Volume:", label_size, size * 0.37, bold=True)
+                centered(percentage, percentage_size, size * 0.57, bold=True)
+            elif text.startswith("SHUTDOWN:"):
+                countdown = text.partition(":")[2]
+                countdown_size = size * 0.285
+                reference_width = text_width("60%", countdown_size, bold=True)
+                volume_width = text_width("Volume:", countdown_size, bold=True)
+                label_size = countdown_size * reference_width / volume_width
+                centered("Shutdown:", label_size, size * 0.30, bold=True)
+                power_ring(0.64, countdown)
+            elif text == "SHUTTING DOWN":
+                power_ring(0.47)
+                centered("Shutting down...", size * 0.068, size * 0.76)
+            else:
+                font_size = size * 0.27
+                max_width = size * 0.78
+                width = text_width(text, font_size)
+                if width > max_width:
+                    font_size *= max_width / width
+                centered(text, font_size, size * 0.50)
+            cairo.cairo_surface_flush(surface)
+        finally:
+            cairo.cairo_destroy(context)
+            cairo.cairo_surface_destroy(surface)
+
+    @classmethod
+    def _tint_image(cls, image: int, size: int) -> None:
+        """Blend the fake-alpha circle in native Cairo instead of a slow pixel loop."""
+        ximage = ctypes.cast(image, ctypes.POINTER(XImage)).contents
+        native_rgb24 = (
+            ximage.data
+            and ximage.bits_per_pixel == 32
+            and ximage.red_mask == 0xFF0000
+            and ximage.green_mask == 0x00FF00
+            and ximage.blue_mask == 0x0000FF
+        )
+        if native_rgb24:
+            cairo = cls._load_cairo()
+            surface = cairo.cairo_image_surface_create_for_data(
+                ximage.data, 1, size, size, ximage.bytes_per_line,
+            )
+            if surface:
+                context = cairo.cairo_create(surface)
+                if context:
+                    try:
+                        channel = ((cls.MOODE_GREY >> 16) & 0xFF) / 255.0
+                        cairo.cairo_set_source_rgba(
+                            context, channel, channel, channel, 0.85,
+                        )
+                        cairo.cairo_new_path(context)
+                        cairo.cairo_arc(
+                            context, (size - 1) / 2.0, (size - 1) / 2.0,
+                            size * 0.485, 0.0, 6.283185307179586,
+                        )
+                        cairo.cairo_fill(context)
+                        cairo.cairo_surface_flush(surface)
+                        return
+                    finally:
+                        cairo.cairo_destroy(context)
+                        cairo.cairo_surface_destroy(surface)
+                cairo.cairo_surface_destroy(surface)
+
+        # Portable fallback for unusual X visuals. This is slower, but keeps
+        # the daemon functional instead of assuming a 32-bit RGB framebuffer.
+        x11 = cls._load_x11()
+        center = (size - 1) / 2.0
+        radius_sq = (size * 0.485) ** 2
+        for y in range(size):
+            dy_sq = (y - center) ** 2
+            for x in range(size):
+                if (x - center) ** 2 + dy_sq <= radius_sq:
+                    pixel = x11.XGetPixel(image, x, y)
+                    x11.XPutPixel(
+                        image, x, y,
+                        cls._blend_pixel(pixel, cls.MOODE_GREY, 0.85),
+                    )
+
+    def show_sequence(
+        self,
+        frames: list[tuple[str, float]],
+        cancel_event: threading.Event | None = None,
+    ) -> None:
+        clean_frames = [
+            (text.strip().upper()[:32], max(0.1, duration))
+            for text, duration in frames
+            if text.strip()
+        ]
+        if not clean_frames:
+            return
+        os.environ["DISPLAY"] = self.display_name
+        os.environ["XAUTHORITY"] = self.xauthority
+        x11 = self._load_x11()
+        display = x11.XOpenDisplay(self.display_name.encode())
+        if not display:
+            raise RuntimeError(
+                f"cannot open X display {self.display_name} using {self.xauthority}"
+            )
+
+        image = None
+        window = 0
+        gc = None
+        try:
+            screen = x11.XDefaultScreen(display)
+            width = x11.XDisplayWidth(display, screen)
+            height = x11.XDisplayHeight(display, screen)
+            size, left, top = self._overlay_geometry(width, height)
+            root = x11.XDefaultRootWindow(display)
+            image = x11.XGetImage(
+                display, root, left, top, size, size,
+                ctypes.c_ulong(-1).value, self.ZPIXMAP,
+            )
+            if not image:
+                raise RuntimeError("could not capture pixels below X11 overlay")
+            self._tint_image(image, size)
+
+            window = x11.XCreateSimpleWindow(
+                display, root, left, top, size, size, 0, 0, 0,
+            )
+            attributes = XSetWindowAttributes()
+            attributes.override_redirect = 1
+            x11.XChangeWindowAttributes(
+                display, window, self.CW_OVERRIDE_REDIRECT, ctypes.byref(attributes)
+            )
+            self._make_input_transparent(display, window)
+            gc = x11.XCreateGC(display, window, 0, None)
+            x11.XMapRaised(display, window)
+            for clean_text, duration in clean_frames:
+                x11.XPutImage(
+                    display, window, gc, image, 0, 0, 0, 0, size, size,
+                )
+                try:
+                    self._draw_lato_text(
+                        x11, display, screen, window, clean_text, size,
+                    )
+                except (OSError, RuntimeError) as exc:
+                    LOG.warning(
+                        "Lato/Cairo overlay text unavailable; using bitmap: %s", exc,
+                    )
+                    x11.XSetForeground(display, gc, 0xF0F0F0)
+                    self._draw_text(x11, display, window, gc, clean_text, size)
+                x11.XSync(display, False)
+                if cancel_event is None:
+                    time.sleep(duration)
+                elif cancel_event.wait(duration):
+                    break
+        finally:
+            if window:
+                x11.XDestroyWindow(display, window)
+            if gc:
+                x11.XFreeGC(display, gc)
+            if image:
+                x11.XDestroyImage(image)
+            x11.XFlush(display)
+            x11.XCloseDisplay(display)
+
+    def show(
+        self,
+        text: str,
+        duration: float = 2.5,
+        cancel_event: threading.Event | None = None,
+    ) -> None:
+        self.show_sequence([(text, duration)], cancel_event)
+
+
+class OverlayWorker:
+    """Latest-wins, interruptible X11 overlay worker."""
+
+    def __init__(self, overlay: X11Overlay | None = None) -> None:
+        self.enabled = env("SIRI_OVERLAY", "yes").lower() in (
+            "1", "yes", "true", "on",
+        )
+        self.duration = float(env("SIRI_OVERLAY_SECONDS", "1"))
+        if self.duration <= 0:
+            raise ValueError("SIRI_OVERLAY_SECONDS must be greater than zero")
+        self.overlay = overlay or X11Overlay()
+        self.condition = threading.Condition()
+        self.latest: tuple[str, list[tuple[str, float]]] | None = None
+        self.persistent: tuple[str, list[tuple[str, float]]] | None = None
+        self.active_kind: str | None = None
+        self.interrupt = threading.Event()
+        self.stopping = False
+        self.thread = threading.Thread(
+            target=self._run, name="moode-x11-overlay", daemon=True,
+        )
+
+    def start(self) -> None:
+        if self.enabled:
+            self.thread.start()
+
+    def stop(self) -> None:
+        if not self.enabled:
+            return
+        with self.condition:
+            self.stopping = True
+            self.latest = None
+            self.interrupt.set()
+            self.condition.notify()
+        self.thread.join(timeout=2)
+
+    def submit(
+        self, text: str, duration: float | None = None, kind: str = "command",
+    ) -> None:
+        self.submit_sequence(
+            [(text, self.duration if duration is None else duration)], kind,
+        )
+
+    def submit_sequence(
+        self, frames: list[tuple[str, float]], kind: str = "command",
+    ) -> None:
+        if not self.enabled or not frames:
+            return
+        with self.condition:
+            # There is deliberately no FIFO. The newest remote event replaces
+            # both queued and visible content, which keeps rapid volume clicks
+            # responsive instead of replaying stale percentages.
+            self.latest = (kind, frames)
+            self.interrupt.set()
+            self.condition.notify()
+
+    def cancel(self, kind: str | None = None) -> None:
+        if not self.enabled:
+            return
+        with self.condition:
+            if self.latest is not None and (
+                kind is None or self.latest[0] == kind
+            ):
+                self.latest = None
+            if kind is None or self.active_kind == kind:
+                self.interrupt.set()
+
+    def set_persistent(self, text: str, kind: str) -> None:
+        if not self.enabled:
+            return
+        item = (kind, [(text, 365 * 24 * 60 * 60.0)])
+        with self.condition:
+            self.persistent = item
+            self.latest = item
+            self.interrupt.set()
+            self.condition.notify()
+
+    def clear_persistent(self, kind: str) -> None:
+        if not self.enabled:
+            return
+        with self.condition:
+            if self.persistent is not None and self.persistent[0] == kind:
+                self.persistent = None
+            if self.latest is not None and self.latest[0] == kind:
+                self.latest = None
+            if self.active_kind == kind:
+                self.interrupt.set()
+
+    def has_persistent(self, kind: str) -> bool:
+        with self.condition:
+            return self.persistent is not None and self.persistent[0] == kind
+
+    def refresh_persistent(self, kind: str) -> None:
+        """Re-capture the background without interrupting a command overlay."""
+        if not self.enabled:
+            return
+        with self.condition:
+            if self.persistent is None or self.persistent[0] != kind:
+                return
+            if self.active_kind == kind and self.latest is None:
+                self.latest = self.persistent
+                self.interrupt.set()
+                self.condition.notify()
+            elif self.active_kind is None and self.latest is None:
+                self.latest = self.persistent
+                self.condition.notify()
+
+    def start_shutdown(self, seconds: float) -> None:
+        remaining = seconds
+        number = max(1, int(seconds + 0.999999))
+        frames: list[tuple[str, float]] = []
+        while remaining > 0:
+            frame_seconds = min(1.0, remaining)
+            frames.append((f"SHUTDOWN:{number}", frame_seconds))
+            remaining -= frame_seconds
+            number -= 1
+        self.submit_sequence(frames, kind="shutdown")
+
+    def moode_result(self, button_name: str, command: str, body: bytes) -> None:
+        """Translate a successful moOde response into its resulting OSD."""
+        try:
+            result = json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            LOG.warning("Cannot parse moOde response for overlay: %s", button_name)
+            return
+        command_name = command.partition(" ")[0]
+        if command_name == "set_volume" and isinstance(result, dict):
+            volume = result.get("volume")
+            if str(volume).isdigit():
+                self.submit(f"VOLUME:{volume}%")
+        elif command_name == "toggle_play_pause" and isinstance(result, dict):
+            state = str(result.get("state", "")).lower()
+            if state == "play":
+                self.submit("PLAY")
+            elif state in ("pause", "stop"):
+                self.submit("PAUSE")
+
+    def _run(self) -> None:
+        while True:
+            with self.condition:
+                while self.latest is None and not self.stopping:
+                    self.condition.wait()
+                if self.stopping:
+                    return
+                kind, frames = self.latest
+                self.latest = None
+                self.active_kind = kind
+                self.interrupt.clear()
+            try:
+                self.overlay.show_sequence(frames, self.interrupt)
+            except (OSError, RuntimeError) as exc:
+                LOG.error("X11 overlay failed: %s", exc)
+            finally:
+                with self.condition:
+                    if self.active_kind == kind:
+                        self.active_kind = None
+                    if (
+                        not self.stopping
+                        and self.latest is None
+                        and self.persistent is not None
+                    ):
+                        self.latest = self.persistent
+                        self.condition.notify()
+
+
+class BatteryMonitor:
+    """Turn a low Siri Remote battery state into a persistent overlay."""
+
+    def __init__(self, overlay_worker: OverlayWorker, threshold: int = 10) -> None:
+        if not 1 <= threshold <= 100:
+            raise ValueError("battery threshold must be between 1 and 100")
+        self.overlay_worker = overlay_worker
+        self.threshold = threshold
+        self.is_low = False
+        self.last_level: int | None = None
+        self.pending_show = False
+
+    def update(self, level: int) -> bool:
+        if not 0 <= level <= 100:
+            LOG.warning("Ignoring invalid Siri Remote battery level: %d", level)
+            return self.is_low
+        LOG.info("Siri Remote battery: %d%%", level)
+        low = level < self.threshold
+        if low and (not self.is_low or level != self.last_level):
+            if not self.is_low:
+                LOG.warning(
+                    "Siri Remote battery below %d%%; showing persistent warning",
+                    self.threshold,
+                )
+            self.overlay_worker.set_persistent(f"BATTERY:{level}%", "battery")
+        elif not low and self.is_low:
+            LOG.info("Siri Remote battery recovered; clearing warning")
+            self.overlay_worker.clear_persistent("battery")
+        self.is_low = low
+        self.last_level = level
+        if self.pending_show:
+            self.pending_show = False
+            self.overlay_worker.submit(f"BATTERY:{level}%")
+        return low
+
+    def show_current(self) -> None:
+        if self.last_level is None:
+            LOG.info("Battery button clicked; waiting for initial battery reading")
+            self.pending_show = True
+            return
+        LOG.info("Battery button clicked; showing %d%%", self.last_level)
+        self.overlay_worker.submit(f"BATTERY:{self.last_level}%")
+
+
+class PersistentBackgroundWatcher:
+    """Refresh a low-battery overlay when moOde changes track metadata."""
+
+    TRACK_FIELDS = ("file", "songid", "title", "artist", "album", "name", "station")
+
+    def __init__(self, base_url: str, overlay_worker: OverlayWorker) -> None:
+        self.overlay_worker = overlay_worker
+        self.interval = float(env("SIRI_OVERLAY_TRACK_POLL_SECONDS", "2"))
+        if self.interval < 0:
+            raise ValueError("SIRI_OVERLAY_TRACK_POLL_SECONDS cannot be negative")
+        query = urllib.parse.urlencode({"cmd": "get_currentsong"})
+        self.url = f"{base_url}?{query}"
+        self.timeout = min(2.0, float(env("MOODE_HTTP_TIMEOUT", "4")))
+        self.stop_event = threading.Event()
+        self.last_signature: tuple[str, ...] | None = None
+        self.thread = threading.Thread(
+            target=self._run, name="moode-track-overlay-refresh", daemon=True,
+        )
+
+    def start(self) -> None:
+        if self.overlay_worker.enabled and self.interval > 0:
+            self.thread.start()
+
+    def stop(self) -> None:
+        self.stop_event.set()
+        if self.thread.is_alive():
+            self.thread.join(timeout=2)
+
+    @classmethod
+    def signature(cls, data: object) -> tuple[str, ...] | None:
+        if not isinstance(data, dict):
+            return None
+        normalized = {str(key).lower(): str(value) for key, value in data.items()}
+        signature = tuple(normalized.get(field, "") for field in cls.TRACK_FIELDS)
+        return signature if any(signature) else None
+
+    def _read_signature(self) -> tuple[str, ...] | None:
+        request = urllib.request.Request(
+            self.url,
+            headers={"User-Agent": "siri-remote-moode/1", "Connection": "close"},
+        )
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            data = json.loads(response.read(16384).decode("utf-8"))
+        return self.signature(data)
+
+    def _check_once(self) -> None:
+        if not self.overlay_worker.has_persistent("battery"):
+            self.last_signature = None
+            return
+        try:
+            signature = self._read_signature()
+        except (OSError, ValueError, urllib.error.URLError) as exc:
+            LOG.debug("Cannot check current song for overlay refresh: %s", exc)
+            return
+        if signature is None:
+            return
+        if self.last_signature is not None and signature != self.last_signature:
+            LOG.debug("Track changed; refreshing persistent battery background")
+            self.overlay_worker.refresh_persistent("battery")
+        self.last_signature = signature
+
+    def _run(self) -> None:
+        while not self.stop_event.wait(self.interval):
+            self._check_once()
+
+
 class ButtonMapper:
     def __init__(
         self,
         worker: MoodeWorker,
         shutdown_action=None,
         screen_clicker: X11ClickWorker | None = None,
+        overlay_worker: OverlayWorker | None = None,
+        battery_display_action=None,
     ) -> None:
         self.worker = worker
         self.screen_clicker = screen_clicker
+        self.overlay_worker = overlay_worker
+        self.battery_display_action = battery_display_action
         self.previous = 0
         self.lock = threading.Lock()
         self.last_touch_x: int | None = None
@@ -564,6 +1481,11 @@ class ButtonMapper:
         self.shutdown_action = shutdown_action or self._run_shutdown
         self.home_timer: threading.Timer | None = None
         self.home_fired = False
+        self.mic_mask = int(env("SIRI_MIC_BUTTON_MASK", "0x10"), 0)
+        if self.mic_mask <= 0 or self.mic_mask > 0xFF:
+            raise ValueError("SIRI_MIC_BUTTON_MASK must be between 0x01 and 0xff")
+        if self.mic_mask == self.home_mask:
+            raise ValueError("SIRI_MIC_BUTTON_MASK must differ from the Home mask")
         self.mapping = {
             BUTTON_AIRPLAY: ("AirPlay", env("MOODE_AIRPLAY_CMD", "")),
             BUTTON_VOLUME_UP: ("Volume +", env("MOODE_VOLUME_UP_CMD", "set_volume -up 5")),
@@ -583,6 +1505,8 @@ class ButtonMapper:
             if self.home_timer is not None:
                 self.home_timer.cancel()
                 self.home_timer = None
+        if self.overlay_worker is not None:
+            self.overlay_worker.cancel("shutdown")
 
     def _run_shutdown(self) -> None:
         LOG.warning("Home held for %.1f seconds; shutting down the Raspberry Pi", self.home_hold_seconds)
@@ -597,6 +1521,10 @@ class ButtonMapper:
             if not self.previous & self.home_mask or self.home_fired:
                 return
             self.home_fired = True
+        if self.overlay_worker is not None:
+            self.overlay_worker.submit(
+                "SHUTTING DOWN", duration=1.0, kind="shutdown",
+            )
         self.shutdown_action()
 
     def _update_home_locked(self, previous: int, buttons: int) -> None:
@@ -611,12 +1539,16 @@ class ButtonMapper:
                 "Home pressed; hold for %.1f seconds to shut down",
                 self.home_hold_seconds,
             )
+            if self.overlay_worker is not None:
+                self.overlay_worker.start_shutdown(self.home_hold_seconds)
             timer.start()
         elif was_pressed and not is_pressed:
             if self.home_timer is not None:
                 self.home_timer.cancel()
                 self.home_timer = None
             self.home_fired = False
+            if self.overlay_worker is not None:
+                self.overlay_worker.cancel("shutdown")
 
     @staticmethod
     def decode_touch_x(payload: bytes) -> int | None:
@@ -691,7 +1623,13 @@ class ButtonMapper:
             touch_action = self._touch_click_action_locked(buttons, now)
 
         if touch_action is not None:
+            if self.overlay_worker is not None:
+                self.overlay_worker.submit(
+                    "PREVIOUS" if touch_action[1] == self.previous_command else "NEXT"
+                )
             self.worker.submit(*touch_action)
+        if newly_pressed & self.mic_mask and self.battery_display_action is not None:
+            self.battery_display_action()
         if newly_pressed & BUTTON_MENU and self.screen_clicker is not None:
             self.screen_clicker.submit()
         for mask, (name, command) in self.mapping.items():
@@ -699,6 +1637,7 @@ class ButtonMapper:
             # and must not also execute its normal short-press mapping.
             if (
                 mask != self.home_mask
+                and not (mask == self.mic_mask and self.battery_display_action is not None)
                 and not (mask == BUTTON_MENU and self.screen_clicker is not None)
                 and newly_pressed & mask
             ):
@@ -735,12 +1674,26 @@ def run(args: argparse.Namespace) -> int:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
 
-    worker = MoodeWorker(args.moode_url, args.http_timeout, args.dry_run)
+    overlay_worker = OverlayWorker()
+    battery_monitor = BatteryMonitor(overlay_worker, args.battery_threshold)
+    background_watcher = PersistentBackgroundWatcher(
+        args.moode_url, overlay_worker,
+    )
+    worker = MoodeWorker(
+        args.moode_url,
+        args.http_timeout,
+        args.dry_run,
+        result_handler=overlay_worker.moode_result,
+    )
     screen_clicker = X11ClickWorker()
     mapper = ButtonMapper(
         worker,
         screen_clicker=screen_clicker if screen_clicker.enabled else None,
+        overlay_worker=overlay_worker if overlay_worker.enabled else None,
+        battery_display_action=battery_monitor.show_current,
     )
+    overlay_worker.start()
+    background_watcher.start()
     worker.start()
     screen_clicker.start()
 
@@ -750,6 +1703,7 @@ def run(args: argparse.Namespace) -> int:
             client = RawAttClient(args.mac, args.address_type, args.security)
             att_busy = False
             client.notification_handler = mapper.notification
+            client.battery_handler = battery_monitor.update
             mapper.reset()
             try:
                 LOG.info("Connecting to Siri Remote %s", args.mac)
@@ -762,8 +1716,15 @@ def run(args: argparse.Namespace) -> int:
                     LOG.info("Connected; using default ATT MTU 23")
                 client.enable_input()
                 LOG.info("Ready; listening for notifications on 0x0023")
+                if args.battery_check > 0:
+                    client.read_battery("Initial check")
                 delay = args.reconnect_min
-                client.receive_forever(stop_event, args.keepalive)
+                client.receive_forever(
+                    stop_event,
+                    args.keepalive,
+                    args.battery_check,
+                    args.battery_low_check,
+                )
             except (ConnectionError, OSError, PermissionError) as exc:
                 if stop_event.is_set():
                     break
@@ -787,6 +1748,8 @@ def run(args: argparse.Namespace) -> int:
     finally:
         screen_clicker.stop()
         worker.stop()
+        background_watcher.stop()
+        overlay_worker.stop()
     return 0
 
 
@@ -812,6 +1775,24 @@ def parse_args() -> argparse.Namespace:
         default=float(env("SIRI_KEEPALIVE_SECONDS", "0")),
     )
     parser.add_argument(
+        "--battery-check",
+        type=float,
+        default=float(env("SIRI_BATTERY_CHECK_SECONDS", "900")),
+        help="seconds between Siri Remote battery checks; 0 disables checks",
+    )
+    parser.add_argument(
+        "--battery-low-check",
+        type=float,
+        default=float(env("SIRI_BATTERY_LOW_CHECK_SECONDS", "300")),
+        help="seconds between battery checks while below the low threshold",
+    )
+    parser.add_argument(
+        "--battery-threshold",
+        type=int,
+        default=int(env("SIRI_BATTERY_LOW_PERCENT", "10")),
+        help="show the persistent empty-battery overlay below this percentage",
+    )
+    parser.add_argument(
         "--reclaim-busy",
         action=argparse.BooleanOptionalAction,
         default=env("SIRI_RECLAIM_BUSY", "yes").lower() in ("1", "yes", "true", "on"),
@@ -831,6 +1812,12 @@ def parse_args() -> argparse.Namespace:
         parser.error("MTU must be between 23 and 517")
     if args.keepalive < 0:
         parser.error("keepalive interval cannot be negative")
+    if args.battery_check < 0:
+        parser.error("battery check interval cannot be negative")
+    if args.battery_low_check < 0:
+        parser.error("low-battery check interval cannot be negative")
+    if not 1 <= args.battery_threshold <= 100:
+        parser.error("battery threshold must be between 1 and 100")
     parse_mac(args.mac)
     return args
 

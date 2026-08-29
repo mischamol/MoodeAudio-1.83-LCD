@@ -51,6 +51,7 @@ bluetoothctl trust 70:48:0F:F2:65:99
 | `00 02` | Volume + | `set_volume -up 5` |
 | `00 04` | Volume - | `set_volume -dn 5` |
 | `00 08` | Play/Pause | `toggle_play_pause` |
+| `00 10` | Microfoon/Siri | toon batterijpercentage |
 | `00 20` | Menu/Back | wissel Playback en de laatste Library-view |
 | touchpad links + fysieke click | Vorige nummer | `previous` |
 | touchpad rechts + fysieke click | Volgende nummer | `next` |
@@ -84,6 +85,50 @@ moOde-bestanden toegevoegd.
 De Home/TV-knop voert bij kort indrukken niets uit. Alleen onafgebroken drie
 seconden vasthouden voert `/usr/bin/systemctl poweroff` uit. De knopcode en duur zijn instelbaar met
 `SIRI_HOME_BUTTON_MASK` en `SIRI_HOME_HOLD_SECONDS`.
+De Microfoon/Siri-knop toont bij een gewone klik direct de laatst gemeten
+batterijwaarde in dezelfde batterijoverlay. De knopcode is instelbaar met
+`SIRI_MIC_BUTTON_MASK`.
+
+## Schermoverlay
+
+De daemon toont zonder compositor of extra package een ronde schermoverlay:
+
+- Play/Pauze toont de toestand die moOde na de toggle retourneert;
+- Volume toont het werkelijke percentage dat moOde na de wijziging retourneert;
+- touchpad links/rechts toont Previous/Next;
+- Home toont tijdens vasthouden een annuleerbare `3`, `2`, `1`-aftelling;
+- bij minder dan 10% Siri Remote-batterij blijft een leeg batterijsymbool met
+  het actuele percentage staan;
+- Menu/Back toont bewust geen overlay.
+
+Bluetooth, REST-opdrachten en de overlay draaien in afzonderlijke workers. Een
+overlay pauzeert de knopactie dus niet. De overlaywachtrij gebruikt uitsluitend
+het nieuwste event: bij snel achter elkaar Volume indrukken vervangt ieder nieuw
+percentage direct het vorige en worden oude percentages niet later afgespeeld.
+Een knopoverlay vervangt een actieve batterijwaarschuwing één seconde; daarna
+keert het batterijsymbool automatisch terug. Het percentage wordt bij iedere
+meting bijgewerkt. De waarschuwing verdwijnt pas
+wanneer een latere meting 10% of meer aangeeft. De daemon controleert eenmaal
+na verbinden, daarna standaard iedere 15 minuten en bij een lage batterij
+iedere vijf minuten, zonder parallelle ATT-reads.
+De standaardduur is één seconde en is instelbaar met
+`SIRI_OVERLAY_SECONDS`; zet `SIRI_OVERLAY=no` om de overlay uit te schakelen.
+De nep-transparante achtergrond wordt met de reeds aanwezige X11-, Cairo- en
+Lato-componenten opgebouwd. Er worden geen moOde-bestanden gewijzigd.
+Zolang de batterijmelding zichtbaar is, controleert een lichte lokale watcher
+iedere twee seconden alleen de stabiele `get_currentsong`-velden. Bij een ander
+nummer of gewijzigde metadata wordt de achtergrond onder de cirkel opnieuw
+vastgelegd; voortgangstijd veroorzaakt geen refresh. De overlay is bovendien
+klikdoorlatend, zodat Menu/Back ook met een lage batterij blijft werken.
+
+De batterijbewaking is instelbaar met:
+
+```text
+SIRI_BATTERY_CHECK_SECONDS=900
+SIRI_BATTERY_LOW_CHECK_SECONDS=300
+SIRI_BATTERY_LOW_PERCENT=10
+SIRI_OVERLAY_TRACK_POLL_SECONDS=2
+```
 
 De query wordt correct percent-encoded, bijvoorbeeld:
 

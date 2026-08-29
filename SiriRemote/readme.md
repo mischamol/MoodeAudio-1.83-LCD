@@ -198,15 +198,20 @@ hostname -I
 On the Windows computer, open PowerShell and upload the package:
 
 ```powershell
-scp "siri-remote-moode.zip" username@moode:~/
+scp "C:\Users\p58151600\Documents\Codex\2026-08-22\doel-siri-remote-onder-moode-audio\outputs\siri-remote-moode.zip" mischa@moode:~/
 ```
 
-Replace `username` with the SSH username.
+Replace `mischa` with the SSH username. If the hostname `moode` cannot be
+resolved, use the IP address:
+
+```powershell
+scp "C:\Users\p58151600\Documents\Codex\2026-08-22\doel-siri-remote-onder-moode-audio\outputs\siri-remote-moode.zip" mischa@192.168.1.50:~/
+```
 
 Connect to the Pi:
 
 ```powershell
-ssh username@moode
+ssh mischa@moode
 ```
 
 ## 6. Install the daemon
@@ -307,6 +312,7 @@ backoff between 0.2 and 1 second.
 | `00 02` | Volume Up | `set_volume -up 5` |
 | `00 04` | Volume Down | `set_volume -dn 5` |
 | `00 08` | Play/Pause | `toggle_play_pause` |
+| `00 10` | Microphone/Siri | Show battery percentage |
 | `00 20` | Menu/Back | Alternate Playback and the last Library view |
 | Touchpad left + physical click | Previous track | `previous` |
 | Touchpad right + physical click | Next track | `next` |
@@ -327,6 +333,54 @@ Album and `playback,radio` returns to Radio Stations. Folder, Tag, and Playlist
 use the same mechanism. At startup the script waits for X11 and first
 synchronizes the UI to Playback. It installs no additional package or
 configuration file and modifies no moOde WebUI file.
+
+### Non-blocking on-screen feedback
+
+The daemon uses the X11, Cairo, and Lato components already present on moOde to
+show a one-second circular overlay. It does not install a compositor or another
+package and does not modify moOde files.
+
+- Play/Pause uses the resulting state returned by `toggle_play_pause`.
+- Volume uses the actual percentage returned by `set_volume`.
+- Physical touchpad clicks show Previous or Next.
+- Home shows an interruptible `3`, `2`, `1` shutdown countdown.
+- Below 10%, an empty battery symbol shows the current percentage and remains
+  visible until a later reading is 10% or higher.
+- Menu/Back deliberately has no overlay.
+
+Bluetooth input, HTTP commands, and drawing use separate workers. Drawing can
+therefore never delay a remote action. The display worker is latest-wins rather
+than FIFO: a new button event immediately replaces the current or pending
+overlay. Rapid volume clicks do not cause old percentage screens to be replayed
+later. Configure or disable this feature in `/etc/default/siri-remote-moode`:
+
+```text
+SIRI_OVERLAY=yes
+SIRI_OVERLAY_SECONDS=1
+```
+
+A command overlay temporarily replaces the persistent battery warning for one
+second; the empty battery symbol then returns automatically. Battery reads stay
+inside the single ATT event loop—once after connecting, then every 15 minutes
+normally and every five minutes while low—so no concurrent Bluetooth operation
+is introduced:
+
+```text
+SIRI_BATTERY_CHECK_SECONDS=900
+SIRI_BATTERY_LOW_CHECK_SECONDS=300
+SIRI_BATTERY_LOW_PERCENT=10
+```
+
+While the battery warning is persistent, the daemon checks only stable
+`get_currentsong` identity fields every two seconds. A track or metadata change
+rebuilds the captured fake-transparent background; elapsed/time changes are
+ignored. The overlay also has an empty X11 input shape, so Menu/Back clicks pass
+through it. Configure the watcher with:
+
+```text
+SIRI_OVERLAY_TRACK_POLL_SECONDS=2
+```
+
 Commands can be changed in:
 
 ```text
@@ -365,6 +419,14 @@ SIRI_HOME_COMMAND=/usr/bin/systemctl poweroff
 The Home button must remain pressed continuously for three seconds. Releasing
 it earlier cancels the shutdown and performs no other action. If another remote reports a different Home code,
 enable debug logging, observe its `Input notification`, and update the mask.
+
+Clicking the Microphone/Siri button immediately shows the most recently measured
+battery percentage in the same battery overlay. It does not issue a concurrent
+ATT read. Configure the button code with:
+
+```text
+SIRI_MIC_BUTTON_MASK=0x10
+```
 
 ## Troubleshooting
 
