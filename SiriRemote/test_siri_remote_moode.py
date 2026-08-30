@@ -58,6 +58,16 @@ class FakeOverlayWorker:
         self.refreshes.append(kind)
 
 
+class FakeRendererGuard:
+    def __init__(self, allowed):
+        self.allowed = allowed
+        self.actions = []
+
+    def allows(self, action_name):
+        self.actions.append(action_name)
+        return self.allowed
+
+
 def touch_report(x, buttons=0, pressure=40):
     payload = bytearray(13)
     payload[0] = 1
@@ -168,7 +178,7 @@ class ButtonMapperTests(unittest.TestCase):
         self.assertEqual(self.worker.actions, [])
         mapper.reset()
 
-    def test_touch_navigation_submits_overlay_without_waiting_for_http(self):
+    def test_touch_navigation_waits_for_success_before_overlay(self):
         overlay = FakeOverlayWorker()
         mapper = remote.ButtonMapper(
             self.worker,
@@ -184,10 +194,7 @@ class ButtonMapperTests(unittest.TestCase):
             remote.HANDLE_INPUT_VALUE,
             touch_report(3600, remote.BUTTON_TOUCHPAD),
         )
-        self.assertEqual(
-            [item[0] for item in overlay.submissions],
-            ["PREVIOUS", "NEXT"],
-        )
+        self.assertEqual(overlay.submissions, [])
         mapper.reset()
 
     def test_home_starts_and_release_cancels_shutdown_overlay(self):
@@ -222,7 +229,73 @@ class ButtonMapperTests(unittest.TestCase):
         mapper.reset()
 
 
+class RendererGuardTests(unittest.TestCase):
+    def test_active_renderers_recognizes_all_enabled_flags(self):
+        data = {flag: "0" for flag in remote.RendererGuard.ACTIVE_FLAGS}
+        data.update({"aplactive": "1", "spotactive": 1, "rxactive": "1"})
+        self.assertEqual(
+            remote.RendererGuard.active_renderers(data),
+            ("aplactive", "spotactive", "rxactive"),
+        )
+
+    def test_active_renderers_rejects_invalid_response(self):
+        with self.assertRaisesRegex(ValueError, "invalid"):
+            remote.RendererGuard.active_renderers([])
+
+    def test_active_renderer_blocks_action_and_status_failure_fails_closed(self):
+        blocked = []
+        guard = remote.RendererGuard(
+            "http://localhost/command/", 4, blocked_handler=blocked.append,
+        )
+        with mock.patch.object(guard, "check", return_value=("aplactive",)):
+            self.assertFalse(guard.allows("Play/Pause"))
+        with mock.patch.object(guard, "check", return_value=None):
+            self.assertFalse(guard.allows("Volume +"))
+        self.assertEqual(blocked, ["Play/Pause", "Volume +"])
+
+    def test_no_active_renderer_allows_action(self):
+        blocked = []
+        guard = remote.RendererGuard(
+            "http://localhost/command/", 4, blocked_handler=blocked.append,
+        )
+        with mock.patch.object(guard, "check", return_value=()):
+            self.assertTrue(guard.allows("Play/Pause"))
+        self.assertEqual(blocked, [])
+
+
+class MoodeWorkerTests(unittest.TestCase):
+    def test_active_renderer_prevents_http_request(self):
+        guard = FakeRendererGuard(False)
+        worker = remote.MoodeWorker(
+            "http://localhost/command/", 1, renderer_guard=guard,
+        )
+        with mock.patch.object(remote.urllib.request, "urlopen") as urlopen:
+            worker.start()
+            worker.submit("Play/Pause", "toggle_play_pause")
+            worker.stop()
+            worker.thread.join(1)
+        self.assertFalse(worker.thread.is_alive())
+        urlopen.assert_not_called()
+        self.assertEqual(guard.actions, ["Play/Pause"])
+
+
 class X11ClickWorkerTests(unittest.TestCase):
+    def test_active_renderer_prevents_menu_click(self):
+        guard = FakeRendererGuard(False)
+        with mock.patch.dict(
+            os.environ, {"SIRI_MENU_SCREEN_CLICK": "yes"}, clear=False
+        ):
+            clicker = remote.X11ClickWorker(guard)
+        with mock.patch.object(clicker, "_ensure_playback"), \
+                mock.patch.object(clicker, "_click") as click:
+            clicker.start()
+            clicker.submit()
+            clicker.stop()
+            clicker.thread.join(1)
+        self.assertFalse(clicker.thread.is_alive())
+        click.assert_not_called()
+        self.assertEqual(guard.actions, ["Menu/Back"])
+
     def test_menu_uses_actual_moode_view_for_both_directions(self):
         env = {
             "SIRI_MENU_SCREEN_CLICK": "yes",
@@ -324,6 +397,9 @@ class X11OverlayTests(unittest.TestCase):
         self.assertLess(width, 360)
         self.assertEqual(height, scale * 7)
 
+    def test_disabled_overlay_has_every_required_glyph(self):
+        self.assertTrue(set("DISABLED") <= remote.X11Overlay.FONT_5X7.keys())
+
     def test_short_text_scales_with_large_overlay(self):
         _text, small_scale, _width, _height = remote.X11Overlay._text_layout("TEST", 360)
         _text, large_scale, width, _height = remote.X11Overlay._text_layout("TEST", 696)
@@ -362,6 +438,16 @@ class OverlayWorkerTests(unittest.TestCase):
             "Play/Pause", "toggle_play_pause", b'{"state":"stop"}',
         )
         self.assertEqual(self.worker.latest[1][0][0], "PAUSE")
+
+    def test_navigation_response_uses_button_and_accepts_non_json_body(self):
+        self.worker.moode_result(
+            "Touchpad left / Previous", "custom-previous", b"",
+        )
+        self.assertEqual(self.worker.latest[1][0][0], "PREVIOUS")
+        self.worker.moode_result(
+            "Touchpad right / Next", "custom-next", b"OK",
+        )
+        self.assertEqual(self.worker.latest[1][0][0], "NEXT")
 
     def test_latest_volume_replaces_stale_pending_volume(self):
         for volume in ("50", "55", "60"):

@@ -395,6 +395,87 @@ class RawAttClient:
                 next_battery_check = time.monotonic() + interval
 
 
+class RendererGuard:
+    """Read moOde's renderer-active flags before ordinary remote actions."""
+
+    ACTIVE_FLAGS = (
+        "btactive",
+        "aplactive",
+        "spotactive",
+        "deezactive",
+        "slactive",
+        "paactive",
+        "rbactive",
+        "inpactive",
+        "rxactive",
+    )
+
+    def __init__(self, command_url: str, timeout: float, blocked_handler=None) -> None:
+        self.blocked_handler = blocked_handler
+        self.enabled = env("SIRI_IGNORE_DURING_RENDERER", "yes").lower() in (
+            "1", "yes", "true", "on",
+        )
+        self.cache_seconds = float(env("SIRI_RENDERER_CACHE_SECONDS", "0.25"))
+        if self.cache_seconds < 0:
+            raise ValueError("SIRI_RENDERER_CACHE_SECONDS cannot be negative")
+        self.timeout = min(2.0, timeout)
+        self.url = urllib.parse.urljoin(
+            command_url,
+            "cfg-table.php?cmd=get_cfg_system",
+        )
+        self.lock = threading.Lock()
+        self.last_check = 0.0
+        self.last_result: tuple[str, ...] | None = None
+
+    @classmethod
+    def active_renderers(cls, data: object) -> tuple[str, ...]:
+        if not isinstance(data, dict):
+            raise ValueError("invalid get_cfg_system response")
+        return tuple(flag for flag in cls.ACTIVE_FLAGS if str(data.get(flag, "0")) == "1")
+
+    def check(self) -> tuple[str, ...] | None:
+        """Return active flags, empty when inactive, or None on status failure."""
+        if not self.enabled:
+            return ()
+        with self.lock:
+            now = time.monotonic()
+            if now - self.last_check <= self.cache_seconds and self.last_result is not None:
+                return self.last_result
+            request = urllib.request.Request(
+                self.url,
+                headers={"User-Agent": "siri-remote-moode/1", "Connection": "close"},
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    data = json.loads(response.read(262144).decode("utf-8"))
+                result = self.active_renderers(data)
+            except (OSError, ValueError, urllib.error.URLError) as exc:
+                LOG.error("Cannot determine renderer state; ignoring remote action: %s", exc)
+                self.last_check = now
+                self.last_result = None
+                return None
+            self.last_check = now
+            self.last_result = result
+            return result
+
+    def allows(self, action_name: str) -> bool:
+        active = self.check()
+        if active is None:
+            if self.blocked_handler is not None:
+                self.blocked_handler(action_name)
+            return False
+        if active:
+            LOG.info(
+                "Ignoring %s while external renderer is active: %s",
+                action_name,
+                ", ".join(active),
+            )
+            if self.blocked_handler is not None:
+                self.blocked_handler(action_name)
+            return False
+        return True
+
+
 class MoodeWorker:
     def __init__(
         self,
@@ -402,11 +483,13 @@ class MoodeWorker:
         timeout: float,
         dry_run: bool = False,
         result_handler=None,
+        renderer_guard: RendererGuard | None = None,
     ) -> None:
         self.base_url = base_url
         self.timeout = timeout
         self.dry_run = dry_run
         self.result_handler = result_handler
+        self.renderer_guard = renderer_guard
         self.commands: queue.Queue[tuple[str, str] | None] = queue.Queue(maxsize=32)
         self.thread = threading.Thread(target=self._run, name="moode-http", daemon=True)
 
@@ -434,6 +517,11 @@ class MoodeWorker:
             if item is None:
                 return
             button_name, command = item
+            if (
+                self.renderer_guard is not None
+                and not self.renderer_guard.allows(button_name)
+            ):
+                continue
             if self.dry_run:
                 LOG.info("DRY RUN: %s -> %s", button_name, command)
                 continue
@@ -461,7 +549,8 @@ class MoodeWorker:
 class X11ClickWorker:
     """Generate a click on moOde's local X11 display without extra packages."""
 
-    def __init__(self) -> None:
+    def __init__(self, renderer_guard: RendererGuard | None = None) -> None:
+        self.renderer_guard = renderer_guard
         self.enabled = env("SIRI_MENU_SCREEN_CLICK", "no").lower() in (
             "1", "yes", "true", "on"
         )
@@ -620,6 +709,11 @@ class X11ClickWorker:
             item = self.commands.get()
             if item is None:
                 return
+            if (
+                self.renderer_guard is not None
+                and not self.renderer_guard.allows("Menu/Back")
+            ):
+                continue
             try:
                 self._click()
             except (OSError, RuntimeError) as exc:
@@ -647,7 +741,10 @@ class X11Overlay:
         "8": ("01110", "10001", "10001", "01110", "10001", "10001", "01110"),
         "9": ("01110", "10001", "10001", "01111", "00001", "00001", "01110"),
         "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
+        "B": ("11110", "10001", "10001", "11110", "10001", "10001", "11110"),
+        "D": ("11110", "10001", "10001", "10001", "10001", "10001", "11110"),
         "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
+        "I": ("11111", "00100", "00100", "00100", "00100", "00100", "11111"),
         "L": ("10000", "10000", "10000", "10000", "10000", "10000", "11111"),
         "M": ("10001", "11011", "10101", "10101", "10001", "10001", "10001"),
         "O": ("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
@@ -999,6 +1096,14 @@ class X11Overlay:
                 label_size = percentage_size * target_width / label_width
                 centered("Volume:", label_size, size * 0.37, bold=True)
                 centered(percentage, percentage_size, size * 0.57, bold=True)
+            elif text == "DISABLED":
+                # Match the calibrated Volume label exactly: Lato Bold, title
+                # case, and the size used when the displayed value is 60%.
+                reference_size = size * 0.285
+                reference_width = text_width("60%", reference_size, bold=True)
+                volume_width = text_width("Volume:", reference_size, bold=True)
+                label_size = reference_size * reference_width / volume_width
+                centered("Disabled", label_size, size * 0.50, bold=True)
             elif text.startswith("SHUTDOWN:"):
                 countdown = text.partition(":")[2]
                 countdown_size = size * 0.285
@@ -1280,6 +1385,15 @@ class OverlayWorker:
 
     def moode_result(self, button_name: str, command: str, body: bytes) -> None:
         """Translate a successful moOde response into its resulting OSD."""
+        # Previous/Next responses are not consistently JSON. Their overlay is
+        # tied to successful HTTP completion so a renderer-blocked action does
+        # not misleadingly show a navigation symbol.
+        if button_name == "Touchpad left / Previous":
+            self.submit("PREVIOUS")
+            return
+        if button_name == "Touchpad right / Next":
+            self.submit("NEXT")
+            return
         try:
             result = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
@@ -1623,10 +1737,6 @@ class ButtonMapper:
             touch_action = self._touch_click_action_locked(buttons, now)
 
         if touch_action is not None:
-            if self.overlay_worker is not None:
-                self.overlay_worker.submit(
-                    "PREVIOUS" if touch_action[1] == self.previous_command else "NEXT"
-                )
             self.worker.submit(*touch_action)
         if newly_pressed & self.mic_mask and self.battery_display_action is not None:
             self.battery_display_action()
@@ -1679,13 +1789,23 @@ def run(args: argparse.Namespace) -> int:
     background_watcher = PersistentBackgroundWatcher(
         args.moode_url, overlay_worker,
     )
+    renderer_guard = RendererGuard(
+        args.moode_url,
+        args.http_timeout,
+        blocked_handler=(
+            lambda _action_name: overlay_worker.submit("DISABLED")
+            if overlay_worker.enabled
+            else None
+        ),
+    )
     worker = MoodeWorker(
         args.moode_url,
         args.http_timeout,
         args.dry_run,
         result_handler=overlay_worker.moode_result,
+        renderer_guard=renderer_guard,
     )
-    screen_clicker = X11ClickWorker()
+    screen_clicker = X11ClickWorker(renderer_guard)
     mapper = ButtonMapper(
         worker,
         screen_clicker=screen_clicker if screen_clicker.enabled else None,

@@ -21,6 +21,8 @@ sed -i 's/^MOODE_VOLUME_UP_CMD=set_volume -up 2$/MOODE_VOLUME_UP_CMD=set_volume 
 sed -i 's/^MOODE_VOLUME_DOWN_CMD=set_volume -dn 2$/MOODE_VOLUME_DOWN_CMD=set_volume -dn 5/' /etc/default/siri-remote-moode
 grep -q '^MOODE_PREVIOUS_CMD=' /etc/default/siri-remote-moode || printf '%s\n' 'MOODE_PREVIOUS_CMD=previous' >> /etc/default/siri-remote-moode
 grep -q '^MOODE_NEXT_CMD=' /etc/default/siri-remote-moode || printf '%s\n' 'MOODE_NEXT_CMD=next' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_IGNORE_DURING_RENDERER=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_IGNORE_DURING_RENDERER=yes' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_RENDERER_CACHE_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_RENDERER_CACHE_SECONDS=0.25' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_TOUCH_X_SPLIT=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_TOUCH_X_SPLIT=3096' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_TOUCH_DEAD_ZONE=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_TOUCH_DEAD_ZONE=60' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_TOUCH_MAX_AGE_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_TOUCH_MAX_AGE_SECONDS=1.5' >> /etc/default/siri-remote-moode

@@ -64,6 +64,26 @@ sudoedit /etc/default/siri-remote-moode
 sudo systemctl restart siri-remote-moode
 ```
 
+### Externe renderers
+
+Standaard worden gewone remote-commando's genegeerd zolang moOde een externe
+renderer als actief meldt, waaronder AirPlay, Spotify Connect en Bluetooth.
+Dit geldt voor Play/Pause, Volume, Previous/Next, Menu/Back en optionele gewone
+knopkoppelingen. De microfoonknop blijft het batterijpercentage tonen en Home
+blijft na drie seconden de Pi uitschakelen. Ook de automatische batterijcontrole
+blijft actief. Een geblokkeerde knop toont één seconde `DISABLED`, zonder de
+bediening of een volgende snelle knopdruk op te houden.
+
+De daemon leest de bestaande moOde-status alleen wanneer een gewone knopactie
+binnenkomt en bewaart die maximaal 0,25 seconde. Er draait dus geen extra
+renderer-polling. Als de status niet gelezen kan worden, wordt de gewone actie
+voor de zekerheid genegeerd. Instellingen:
+
+```text
+SIRI_IGNORE_DURING_RENDERER=yes
+SIRI_RENDERER_CACHE_SECONDS=0.25
+```
+
 Alleen een fysieke click op het touchpad geeft een opdracht; aanraken en vegen
 doen niets. De Gen-1 X-positie ligt ongeveer tussen `2278` en `3914`. De daemon
 gebruikt standaard `3096` als midden en negeert een smalle zone van 60 eenheden
