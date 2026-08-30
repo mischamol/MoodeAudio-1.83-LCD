@@ -30,6 +30,18 @@ import urllib.request
 
 LOG = logging.getLogger("siri-remote-moode")
 
+RENDERER_NAMES = {
+    "btactive": "Bluetooth",
+    "aplactive": "AirPlay",
+    "spotactive": "Spotify",
+    "deezactive": "Deezer",
+    "slactive": "Squeezelite",
+    "paactive": "Plexamp",
+    "rbactive": "RoonBridge",
+    "inpactive": "Audio Input",
+    "rxactive": "Multiroom Receiver",
+}
+
 
 class XSetWindowAttributes(ctypes.Structure):
     _fields_ = [
@@ -398,17 +410,7 @@ class RawAttClient:
 class RendererGuard:
     """Read moOde's renderer-active flags before ordinary remote actions."""
 
-    ACTIVE_FLAGS = (
-        "btactive",
-        "aplactive",
-        "spotactive",
-        "deezactive",
-        "slactive",
-        "paactive",
-        "rbactive",
-        "inpactive",
-        "rxactive",
-    )
+    ACTIVE_FLAGS = tuple(RENDERER_NAMES)
 
     def __init__(self, command_url: str, timeout: float, blocked_handler=None) -> None:
         self.blocked_handler = blocked_handler
@@ -462,7 +464,7 @@ class RendererGuard:
         active = self.check()
         if active is None:
             if self.blocked_handler is not None:
-                self.blocked_handler(action_name)
+                self.blocked_handler("Renderer")
             return False
         if active:
             LOG.info(
@@ -471,7 +473,7 @@ class RendererGuard:
                 ", ".join(active),
             )
             if self.blocked_handler is not None:
-                self.blocked_handler(action_name)
+                self.blocked_handler(RENDERER_NAMES.get(active[0], "Renderer"))
             return False
         return True
 
@@ -1096,14 +1098,27 @@ class X11Overlay:
                 label_size = percentage_size * target_width / label_width
                 centered("Volume:", label_size, size * 0.37, bold=True)
                 centered(percentage, percentage_size, size * 0.57, bold=True)
-            elif text == "DISABLED":
-                # Match the calibrated Volume label exactly: Lato Bold, title
-                # case, and the size used when the displayed value is 60%.
+            elif text.startswith("DISABLED:"):
+                renderer_key = text.partition(":")[2]
+                renderer = {
+                    name.upper(): name for name in RENDERER_NAMES.values()
+                }.get(renderer_key, "Renderer")
                 reference_size = size * 0.285
                 reference_width = text_width("60%", reference_size, bold=True)
                 volume_width = text_width("Volume:", reference_size, bold=True)
                 label_size = reference_size * reference_width / volume_width
-                centered("Disabled", label_size, size * 0.50, bold=True)
+                if renderer == "Multiroom Receiver":
+                    renderer_size = size * 0.175
+                    centered("Disabled:", label_size, size * 0.29, bold=True)
+                    centered("Multiroom", renderer_size, size * 0.51, bold=True)
+                    centered("Receiver", renderer_size, size * 0.68, bold=True)
+                else:
+                    renderer_size = size * 0.22
+                    renderer_width = text_width(renderer, renderer_size, bold=True)
+                    if renderer_width > size * 0.76:
+                        renderer_size *= size * 0.76 / renderer_width
+                    centered("Disabled:", label_size, size * 0.37, bold=True)
+                    centered(renderer, renderer_size, size * 0.57, bold=True)
             elif text.startswith("SHUTDOWN:"):
                 countdown = text.partition(":")[2]
                 countdown_size = size * 0.285
@@ -1793,7 +1808,9 @@ def run(args: argparse.Namespace) -> int:
         args.moode_url,
         args.http_timeout,
         blocked_handler=(
-            lambda _action_name: overlay_worker.submit("DISABLED")
+            lambda renderer_name: overlay_worker.submit(
+                f"DISABLED:{renderer_name}"
+            )
             if overlay_worker.enabled
             else None
         ),

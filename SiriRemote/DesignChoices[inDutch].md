@@ -71,8 +71,11 @@ renderer als actief meldt, waaronder AirPlay, Spotify Connect en Bluetooth.
 Dit geldt voor Play/Pause, Volume, Previous/Next, Menu/Back en optionele gewone
 knopkoppelingen. De microfoonknop blijft het batterijpercentage tonen en Home
 blijft na drie seconden de Pi uitschakelen. Ook de automatische batterijcontrole
-blijft actief. Een geblokkeerde knop toont één seconde `DISABLED`, zonder de
-bediening of een volgende snelle knopdruk op te houden.
+blijft actief. Een geblokkeerde knop toont één seconde `Disabled:` met daaronder
+de actieve renderernaam, zonder de bediening of een volgende snelle knopdruk op
+te houden. Ondersteund zijn Bluetooth, AirPlay, Spotify, Deezer, Squeezelite,
+Plexamp, RoonBridge, Audio Input en Multiroom Receiver. Die laatste naam wordt
+over twee regels verdeeld.
 
 De daemon leest de bestaande moOde-status alleen wanneer een gewone knopactie
 binnenkomt en bewaart die maximaal 0,25 seconde. Er draait dus geen extra

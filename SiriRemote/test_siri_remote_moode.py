@@ -251,7 +251,11 @@ class RendererGuardTests(unittest.TestCase):
             self.assertFalse(guard.allows("Play/Pause"))
         with mock.patch.object(guard, "check", return_value=None):
             self.assertFalse(guard.allows("Volume +"))
-        self.assertEqual(blocked, ["Play/Pause", "Volume +"])
+        self.assertEqual(blocked, ["AirPlay", "Renderer"])
+
+    def test_every_renderer_flag_has_a_display_name(self):
+        self.assertEqual(set(remote.RendererGuard.ACTIVE_FLAGS), set(remote.RENDERER_NAMES))
+        self.assertEqual(remote.RENDERER_NAMES["rxactive"], "Multiroom Receiver")
 
     def test_no_active_renderer_allows_action(self):
         blocked = []
