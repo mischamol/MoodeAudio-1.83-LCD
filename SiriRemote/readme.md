@@ -223,20 +223,20 @@ hostname -I
 On the Windows computer, open PowerShell and upload the package:
 
 ```powershell
-scp "C:\Users\p58151600\Documents\Codex\2026-08-22\doel-siri-remote-onder-moode-audio\outputs\siri-remote-moode.zip" mischa@moode:~/
+scp "C:\path\to\siri-remote-moode.zip" username@moode:~/
 ```
 
-Replace `mischa` with the SSH username. If the hostname `moode` cannot be
+Replace `username` with the SSH username. If the hostname `moode` cannot be
 resolved, use the IP address:
 
 ```powershell
-scp "C:\Users\p58151600\Documents\Codex\2026-08-22\doel-siri-remote-onder-moode-audio\outputs\siri-remote-moode.zip" mischa@192.168.1.50:~/
+scp "C:\path\to\siri-remote-moode.zip" username@192.168.1.50:~/
 ```
 
 Connect to the Pi:
 
 ```powershell
-ssh mischa@moode
+ssh username@moode
 ```
 
 ## 6. Install the daemon
@@ -369,8 +369,10 @@ package and does not modify moOde files.
 - Volume uses the actual percentage returned by `set_volume`.
 - Physical touchpad clicks show Previous or Next.
 - Home shows an interruptible `3`, `2`, `1` shutdown countdown.
-- Below 10%, an empty battery symbol shows the current percentage and remains
-  visible until a later reading is 10% or higher.
+- At 5–9%, a white battery overlay shows the freshly read percentage for one
+  second every five minutes.
+- At 0–4%, that fresh reading is repeated every minute and the white
+  battery overlay flashes three times.
 - Menu/Back deliberately has no overlay.
 
 Bluetooth input, HTTP commands, and drawing use separate workers. Drawing can
@@ -384,27 +386,20 @@ SIRI_OVERLAY=yes
 SIRI_OVERLAY_SECONDS=1
 ```
 
-A command overlay temporarily replaces the persistent battery warning for one
-second; the empty battery symbol then returns automatically. Battery reads stay
-inside the single ATT event loop—once after connecting, then every 15 minutes
-normally and every five minutes while low—so no concurrent Bluetooth operation
-is introduced:
+Battery reads stay inside the single ATT event loop, so no concurrent Bluetooth
+operation is introduced. The remote is read once after connecting, every 15
+minutes normally, every five minutes at 5–9%, and every minute at 0–4%. Each low
+or critical warning therefore displays a freshly read percentage:
 
 ```text
 SIRI_BATTERY_CHECK_SECONDS=900
 SIRI_BATTERY_LOW_CHECK_SECONDS=300
+SIRI_BATTERY_CRITICAL_CHECK_SECONDS=60
 SIRI_BATTERY_LOW_PERCENT=10
+SIRI_BATTERY_CRITICAL_PERCENT=5
 ```
 
-While the battery warning is persistent, the daemon checks only stable
-`get_currentsong` identity fields every two seconds. A track or metadata change
-rebuilds the captured fake-transparent background; elapsed/time changes are
-ignored. The overlay also has an empty X11 input shape, so Menu/Back clicks pass
-through it. Configure the watcher with:
-
-```text
-SIRI_OVERLAY_TRACK_POLL_SECONDS=2
-```
+The overlay has an empty X11 input shape, so Menu/Back clicks pass through it.
 
 Commands can be changed in:
 

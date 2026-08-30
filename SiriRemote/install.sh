@@ -32,7 +32,7 @@ grep -q '^SIRI_HOME_COMMAND=' /etc/default/siri-remote-moode || printf '%s\n' 'S
 grep -q '^SIRI_MIC_BUTTON_MASK=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_MIC_BUTTON_MASK=0x10' >> /etc/default/siri-remote-moode
 sed -i '/^SIRI_MIC_HOLD_SECONDS=/d' /etc/default/siri-remote-moode
 # Local display click for Menu/Back. Determine the uid 1000 home directory so
-# the package does not assume that the moOde account is named pi or mischa.
+# the package does not assume a specific moOde account name.
 display_home=$(getent passwd 1000 | cut -d: -f6)
 [ -n "$display_home" ] || display_home=/home/pi
 grep -q '^SIRI_MENU_SCREEN_CLICK=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_MENU_SCREEN_CLICK=yes' >> /etc/default/siri-remote-moode
@@ -40,7 +40,7 @@ grep -q '^SIRI_X_DISPLAY=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI
 grep -q '^SIRI_XAUTHORITY=' /etc/default/siri-remote-moode || printf 'SIRI_XAUTHORITY=%s/.Xauthority\n' "$display_home" >> /etc/default/siri-remote-moode
 grep -q '^SIRI_OVERLAY=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_OVERLAY=yes' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_OVERLAY_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_OVERLAY_SECONDS=1' >> /etc/default/siri-remote-moode
-grep -q '^SIRI_OVERLAY_TRACK_POLL_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_OVERLAY_TRACK_POLL_SECONDS=2' >> /etc/default/siri-remote-moode
+sed -i '/^SIRI_OVERLAY_TRACK_POLL_SECONDS=/d' /etc/default/siri-remote-moode
 sed -i "s|^SIRI_XAUTHORITY=/home/[^/]*/.Xauthority$|SIRI_XAUTHORITY=$display_home/.Xauthority|" /etc/default/siri-remote-moode
 # Remove obsolete fixed metadata coordinates from older package versions. The
 # Python daemon now calculates a safe point inside the cover-art link.
@@ -51,8 +51,12 @@ sed -i 's/^SIRI_KEEPALIVE_SECONDS=.*/SIRI_KEEPALIVE_SECONDS=0/' /etc/default/sir
 grep -q '^SIRI_KEEPALIVE_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_KEEPALIVE_SECONDS=0' >> /etc/default/siri-remote-moode
 sed -i 's/^SIRI_BATTERY_CHECK_SECONDS=300$/SIRI_BATTERY_CHECK_SECONDS=900/' /etc/default/siri-remote-moode
 grep -q '^SIRI_BATTERY_CHECK_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_BATTERY_CHECK_SECONDS=900' >> /etc/default/siri-remote-moode
+sed -i 's/^SIRI_BATTERY_LOW_CHECK_SECONDS=.*/SIRI_BATTERY_LOW_CHECK_SECONDS=300/' /etc/default/siri-remote-moode
 grep -q '^SIRI_BATTERY_LOW_CHECK_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_BATTERY_LOW_CHECK_SECONDS=300' >> /etc/default/siri-remote-moode
+sed -i 's/^SIRI_BATTERY_CRITICAL_CHECK_SECONDS=.*/SIRI_BATTERY_CRITICAL_CHECK_SECONDS=60/' /etc/default/siri-remote-moode
+grep -q '^SIRI_BATTERY_CRITICAL_CHECK_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_BATTERY_CRITICAL_CHECK_SECONDS=60' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_BATTERY_LOW_PERCENT=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_BATTERY_LOW_PERCENT=10' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_BATTERY_CRITICAL_PERCENT=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_BATTERY_CRITICAL_PERCENT=5' >> /etc/default/siri-remote-moode
 sed -i 's/^SIRI_SECURITY=.*/SIRI_SECURITY=medium/' /etc/default/siri-remote-moode
 sed -i 's/^RECONNECT_MIN=.*/RECONNECT_MIN=0.2/' /etc/default/siri-remote-moode
 sed -i 's/^RECONNECT_MAX=.*/RECONNECT_MAX=1/' /etc/default/siri-remote-moode

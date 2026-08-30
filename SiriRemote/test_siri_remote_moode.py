@@ -25,38 +25,22 @@ class FakeClicker:
 class FakeOverlayWorker:
     def __init__(self):
         self.submissions = []
+        self.sequences = []
         self.countdowns = []
         self.cancellations = []
-        self.persistent = []
-        self.cleared_persistent = []
-        self.persistent_kind = None
-        self.refreshes = []
         self.enabled = True
 
     def submit(self, text, duration=None, kind="command"):
         self.submissions.append((text, duration, kind))
+
+    def submit_sequence(self, frames, kind="command"):
+        self.sequences.append((frames, kind))
 
     def start_shutdown(self, seconds):
         self.countdowns.append(seconds)
 
     def cancel(self, kind=None):
         self.cancellations.append(kind)
-
-    def set_persistent(self, text, kind):
-        self.persistent.append((text, kind))
-        self.persistent_kind = kind
-
-    def clear_persistent(self, kind):
-        self.cleared_persistent.append(kind)
-        if self.persistent_kind == kind:
-            self.persistent_kind = None
-
-    def has_persistent(self, kind):
-        return self.persistent_kind == kind
-
-    def refresh_persistent(self, kind):
-        self.refreshes.append(kind)
-
 
 class FakeRendererGuard:
     def __init__(self, allowed):
@@ -476,32 +460,55 @@ class OverlayWorkerTests(unittest.TestCase):
             ),
         )
 
-    def test_command_temporarily_replaces_but_does_not_clear_persistent_item(self):
-        self.worker.set_persistent("BATTERY:9%", "battery")
-        persistent = self.worker.persistent
-        self.worker.submit("VOLUME:60%")
-        self.assertEqual(self.worker.latest[1], [("VOLUME:60%", 1.0)])
-        self.assertEqual(self.worker.persistent, persistent)
-
-
 class BatteryMonitorTests(unittest.TestCase):
-    def test_below_ten_is_persistent_and_ten_clears_it(self):
+    def test_five_to_nine_shows_one_second_warning(self):
+        overlay = FakeOverlayWorker()
+        monitor = remote.BatteryMonitor(
+            overlay, threshold=10, critical_threshold=5,
+        )
+        self.assertTrue(monitor.update(9))
+        self.assertEqual(
+            overlay.submissions,
+            [("BATTERY:9%", 1.0, "battery-low")],
+        )
+
+    def test_below_five_flashes_three_times(self):
+        overlay = FakeOverlayWorker()
+        monitor = remote.BatteryMonitor(
+            overlay, threshold=10, critical_threshold=5,
+        )
+        self.assertTrue(monitor.update(4))
+        self.assertEqual(
+            overlay.sequences,
+            [
+                (
+                    [
+                        ("BATTERY:4%", 0.45),
+                        ("HIDE", 0.25),
+                        ("BATTERY:4%", 0.45),
+                        ("HIDE", 0.25),
+                        ("BATTERY:4%", 0.45),
+                    ],
+                    "battery-critical",
+                )
+            ],
+        )
+
+    def test_ten_stops_periodic_warning(self):
         overlay = FakeOverlayWorker()
         monitor = remote.BatteryMonitor(overlay, threshold=10)
         self.assertTrue(monitor.update(9))
-        self.assertTrue(monitor.update(8))
-        self.assertEqual(
-            overlay.persistent,
-            [("BATTERY:9%", "battery"), ("BATTERY:8%", "battery")],
-        )
+        overlay.submissions.clear()
         self.assertFalse(monitor.update(10))
-        self.assertEqual(overlay.cleared_persistent, ["battery"])
+        self.assertEqual(overlay.submissions, [])
+        self.assertEqual(overlay.sequences, [])
 
     def test_invalid_battery_level_is_ignored(self):
         overlay = FakeOverlayWorker()
         monitor = remote.BatteryMonitor(overlay, threshold=10)
         self.assertFalse(monitor.update(101))
-        self.assertEqual(overlay.persistent, [])
+        self.assertEqual(overlay.submissions, [])
+        self.assertEqual(overlay.sequences, [])
 
     def test_battery_click_displays_cached_percentage(self):
         overlay = FakeOverlayWorker()
@@ -519,34 +526,19 @@ class BatteryMonitorTests(unittest.TestCase):
         self.assertEqual(overlay.submissions[-1][0], "BATTERY:83%")
 
 
-class PersistentBackgroundWatcherTests(unittest.TestCase):
-    def test_signature_ignores_elapsed_but_tracks_metadata(self):
-        first = remote.PersistentBackgroundWatcher.signature(
-            {"file": "a.flac", "Title": "Track A", "elapsed": "1.0"}
+class RawAttClientTests(unittest.TestCase):
+    def test_battery_interval_tracks_latest_att_reading(self):
+        client = remote.RawAttClient(
+            "70:48:0F:F2:65:99", "public", "medium",
         )
-        later = remote.PersistentBackgroundWatcher.signature(
-            {"file": "a.flac", "Title": "Track A", "elapsed": "9.0"}
-        )
-        changed = remote.PersistentBackgroundWatcher.signature(
-            {"file": "b.flac", "Title": "Track B", "elapsed": "0.0"}
-        )
-        self.assertEqual(first, later)
-        self.assertNotEqual(first, changed)
-
-    def test_track_change_refreshes_persistent_battery(self):
-        overlay = FakeOverlayWorker()
-        overlay.set_persistent("BATTERY:9%", "battery")
-        watcher = remote.PersistentBackgroundWatcher(
-            "http://localhost/command/", overlay,
-        )
-        with mock.patch.object(
-            watcher,
-            "_read_signature",
-            side_effect=[("a.flac", "1"), ("b.flac", "2")],
-        ):
-            watcher._check_once()
-            watcher._check_once()
-        self.assertEqual(overlay.refreshes, ["battery"])
+        expected = ((80, 900), (10, 900), (9, 300), (5, 300), (4, 60))
+        for level, interval in expected:
+            with self.subTest(level=level):
+                client.battery_level = level
+                self.assertEqual(
+                    client.battery_interval(900, 300, 60, 10, 5),
+                    interval,
+                )
 
 
 

@@ -210,7 +210,7 @@ class RawAttClient:
         self.sock: socket.socket | None = None
         self.notification_handler = None
         self.battery_handler = None
-        self.battery_is_low = False
+        self.battery_level: int | None = None
 
     def connect(self) -> None:
         libc = ctypes.CDLL(None, use_errno=True)
@@ -350,12 +350,33 @@ class RawAttClient:
         if not value:
             return None
         level = value[0]
+        self.battery_level = level
         LOG.debug("%s; battery=%d%%", source, level)
         if self.battery_handler is not None:
-            result = self.battery_handler(level)
-            if isinstance(result, bool):
-                self.battery_is_low = result
+            self.battery_handler(level)
         return level
+
+    def battery_interval(
+        self,
+        normal_seconds: float,
+        low_seconds: float,
+        critical_seconds: float,
+        low_threshold: int,
+        critical_threshold: int,
+    ) -> float:
+        if (
+            self.battery_level is not None
+            and self.battery_level < critical_threshold
+            and critical_seconds > 0
+        ):
+            return critical_seconds
+        if (
+            self.battery_level is not None
+            and self.battery_level < low_threshold
+            and low_seconds > 0
+        ):
+            return low_seconds
+        return normal_seconds
 
     def receive_forever(
         self,
@@ -363,14 +384,19 @@ class RawAttClient:
         keepalive_seconds: float,
         battery_check_seconds: float = 0,
         battery_low_check_seconds: float = 0,
+        battery_critical_check_seconds: float = 0,
+        battery_low_threshold: int = 10,
+        battery_critical_threshold: int = 5,
     ) -> None:
         next_keepalive = (
             time.monotonic() + keepalive_seconds if keepalive_seconds > 0 else None
         )
-        initial_battery_interval = (
-            battery_low_check_seconds
-            if self.battery_is_low and battery_low_check_seconds > 0
-            else battery_check_seconds
+        initial_battery_interval = self.battery_interval(
+            battery_check_seconds,
+            battery_low_check_seconds,
+            battery_critical_check_seconds,
+            battery_low_threshold,
+            battery_critical_threshold,
         )
         next_battery_check = (
             time.monotonic() + initial_battery_interval
@@ -399,10 +425,12 @@ class RawAttClient:
                 and time.monotonic() >= next_battery_check
             ):
                 self.read_battery("Periodic check")
-                interval = (
-                    battery_low_check_seconds
-                    if self.battery_is_low and battery_low_check_seconds > 0
-                    else battery_check_seconds
+                interval = self.battery_interval(
+                    battery_check_seconds,
+                    battery_low_check_seconds,
+                    battery_critical_check_seconds,
+                    battery_low_threshold,
+                    battery_critical_threshold,
                 )
                 next_battery_check = time.monotonic() + interval
 
@@ -557,7 +585,7 @@ class X11ClickWorker:
             "1", "yes", "true", "on"
         )
         self.display_name = env("SIRI_X_DISPLAY", ":0")
-        self.xauthority = env("SIRI_XAUTHORITY", "/home/mischa/.Xauthority")
+        self.xauthority = env("SIRI_XAUTHORITY", "/home/pi/.Xauthority")
         self.playback_x = int(env("SIRI_PLAYBACK_CLICK_X", "220"), 0)
         self.playback_y = int(env("SIRI_PLAYBACK_CLICK_Y", "1135"), 0)
         self.ready_timeout = float(env("SIRI_X_READY_TIMEOUT", "60"))
@@ -762,7 +790,7 @@ class X11Overlay:
     }
     def __init__(self) -> None:
         self.display_name = env("SIRI_X_DISPLAY", ":0")
-        self.xauthority = env("SIRI_XAUTHORITY", "/home/mischa/.Xauthority")
+        self.xauthority = env("SIRI_XAUTHORITY", "/home/pi/.Xauthority")
 
     @staticmethod
     def _load_x11() -> ctypes.CDLL:
@@ -801,6 +829,7 @@ class X11Overlay:
             ctypes.POINTER(XSetWindowAttributes),
         ]
         x11.XMapRaised.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        x11.XUnmapWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
         x11.XCreateGC.argtypes = [
             ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p,
         ]
@@ -1243,7 +1272,21 @@ class X11Overlay:
             self._make_input_transparent(display, window)
             gc = x11.XCreateGC(display, window, 0, None)
             x11.XMapRaised(display, window)
+            mapped = True
             for clean_text, duration in clean_frames:
+                if clean_text == "HIDE":
+                    if mapped:
+                        x11.XUnmapWindow(display, window)
+                        mapped = False
+                    x11.XSync(display, False)
+                    if cancel_event is None:
+                        time.sleep(duration)
+                    elif cancel_event.wait(duration):
+                        break
+                    continue
+                if not mapped:
+                    x11.XMapRaised(display, window)
+                    mapped = True
                 x11.XPutImage(
                     display, window, gc, image, 0, 0, 0, 0, size, size,
                 )
@@ -1294,7 +1337,6 @@ class OverlayWorker:
         self.overlay = overlay or X11Overlay()
         self.condition = threading.Condition()
         self.latest: tuple[str, list[tuple[str, float]]] | None = None
-        self.persistent: tuple[str, list[tuple[str, float]]] | None = None
         self.active_kind: str | None = None
         self.interrupt = threading.Event()
         self.stopping = False
@@ -1346,46 +1388,6 @@ class OverlayWorker:
                 self.latest = None
             if kind is None or self.active_kind == kind:
                 self.interrupt.set()
-
-    def set_persistent(self, text: str, kind: str) -> None:
-        if not self.enabled:
-            return
-        item = (kind, [(text, 365 * 24 * 60 * 60.0)])
-        with self.condition:
-            self.persistent = item
-            self.latest = item
-            self.interrupt.set()
-            self.condition.notify()
-
-    def clear_persistent(self, kind: str) -> None:
-        if not self.enabled:
-            return
-        with self.condition:
-            if self.persistent is not None and self.persistent[0] == kind:
-                self.persistent = None
-            if self.latest is not None and self.latest[0] == kind:
-                self.latest = None
-            if self.active_kind == kind:
-                self.interrupt.set()
-
-    def has_persistent(self, kind: str) -> bool:
-        with self.condition:
-            return self.persistent is not None and self.persistent[0] == kind
-
-    def refresh_persistent(self, kind: str) -> None:
-        """Re-capture the background without interrupting a command overlay."""
-        if not self.enabled:
-            return
-        with self.condition:
-            if self.persistent is None or self.persistent[0] != kind:
-                return
-            if self.active_kind == kind and self.latest is None:
-                self.latest = self.persistent
-                self.interrupt.set()
-                self.condition.notify()
-            elif self.active_kind is None and self.latest is None:
-                self.latest = self.persistent
-                self.condition.notify()
 
     def start_shutdown(self, seconds: float) -> None:
         remaining = seconds
@@ -1445,24 +1447,26 @@ class OverlayWorker:
                 with self.condition:
                     if self.active_kind == kind:
                         self.active_kind = None
-                    if (
-                        not self.stopping
-                        and self.latest is None
-                        and self.persistent is not None
-                    ):
-                        self.latest = self.persistent
-                        self.condition.notify()
 
 
 class BatteryMonitor:
-    """Turn a low Siri Remote battery state into a persistent overlay."""
+    """Schedule short white battery warnings from periodic ATT readings."""
 
-    def __init__(self, overlay_worker: OverlayWorker, threshold: int = 10) -> None:
+    def __init__(
+        self,
+        overlay_worker: OverlayWorker,
+        threshold: int = 10,
+        critical_threshold: int = 5,
+    ) -> None:
         if not 1 <= threshold <= 100:
             raise ValueError("battery threshold must be between 1 and 100")
+        if not 1 <= critical_threshold < threshold:
+            raise ValueError("critical threshold must be below the low threshold")
         self.overlay_worker = overlay_worker
         self.threshold = threshold
+        self.critical_threshold = critical_threshold
         self.is_low = False
+        self.is_critical = False
         self.last_level: int | None = None
         self.pending_show = False
 
@@ -1472,17 +1476,36 @@ class BatteryMonitor:
             return self.is_low
         LOG.info("Siri Remote battery: %d%%", level)
         low = level < self.threshold
-        if low and (not self.is_low or level != self.last_level):
+        critical = level < self.critical_threshold
+        if critical:
+            if not self.is_critical:
+                LOG.warning(
+                    "Siri Remote battery below %d%%; warning flashes three times",
+                    self.critical_threshold,
+                )
+            self.overlay_worker.submit_sequence(
+                [
+                    (f"BATTERY:{level}%", 0.45),
+                    ("HIDE", 0.25),
+                    (f"BATTERY:{level}%", 0.45),
+                    ("HIDE", 0.25),
+                    (f"BATTERY:{level}%", 0.45),
+                ],
+                kind="battery-critical",
+            )
+        elif low:
             if not self.is_low:
                 LOG.warning(
-                    "Siri Remote battery below %d%%; showing persistent warning",
+                    "Siri Remote battery below %d%%; showing one-second warning",
                     self.threshold,
                 )
-            self.overlay_worker.set_persistent(f"BATTERY:{level}%", "battery")
-        elif not low and self.is_low:
-            LOG.info("Siri Remote battery recovered; clearing warning")
-            self.overlay_worker.clear_persistent("battery")
+            self.overlay_worker.submit(
+                f"BATTERY:{level}%", duration=1.0, kind="battery-low",
+            )
+        elif self.is_low:
+            LOG.info("Siri Remote battery recovered; periodic warning stopped")
         self.is_low = low
+        self.is_critical = critical
         self.last_level = level
         if self.pending_show:
             self.pending_show = False
@@ -1496,72 +1519,6 @@ class BatteryMonitor:
             return
         LOG.info("Battery button clicked; showing %d%%", self.last_level)
         self.overlay_worker.submit(f"BATTERY:{self.last_level}%")
-
-
-class PersistentBackgroundWatcher:
-    """Refresh a low-battery overlay when moOde changes track metadata."""
-
-    TRACK_FIELDS = ("file", "songid", "title", "artist", "album", "name", "station")
-
-    def __init__(self, base_url: str, overlay_worker: OverlayWorker) -> None:
-        self.overlay_worker = overlay_worker
-        self.interval = float(env("SIRI_OVERLAY_TRACK_POLL_SECONDS", "2"))
-        if self.interval < 0:
-            raise ValueError("SIRI_OVERLAY_TRACK_POLL_SECONDS cannot be negative")
-        query = urllib.parse.urlencode({"cmd": "get_currentsong"})
-        self.url = f"{base_url}?{query}"
-        self.timeout = min(2.0, float(env("MOODE_HTTP_TIMEOUT", "4")))
-        self.stop_event = threading.Event()
-        self.last_signature: tuple[str, ...] | None = None
-        self.thread = threading.Thread(
-            target=self._run, name="moode-track-overlay-refresh", daemon=True,
-        )
-
-    def start(self) -> None:
-        if self.overlay_worker.enabled and self.interval > 0:
-            self.thread.start()
-
-    def stop(self) -> None:
-        self.stop_event.set()
-        if self.thread.is_alive():
-            self.thread.join(timeout=2)
-
-    @classmethod
-    def signature(cls, data: object) -> tuple[str, ...] | None:
-        if not isinstance(data, dict):
-            return None
-        normalized = {str(key).lower(): str(value) for key, value in data.items()}
-        signature = tuple(normalized.get(field, "") for field in cls.TRACK_FIELDS)
-        return signature if any(signature) else None
-
-    def _read_signature(self) -> tuple[str, ...] | None:
-        request = urllib.request.Request(
-            self.url,
-            headers={"User-Agent": "siri-remote-moode/1", "Connection": "close"},
-        )
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            data = json.loads(response.read(16384).decode("utf-8"))
-        return self.signature(data)
-
-    def _check_once(self) -> None:
-        if not self.overlay_worker.has_persistent("battery"):
-            self.last_signature = None
-            return
-        try:
-            signature = self._read_signature()
-        except (OSError, ValueError, urllib.error.URLError) as exc:
-            LOG.debug("Cannot check current song for overlay refresh: %s", exc)
-            return
-        if signature is None:
-            return
-        if self.last_signature is not None and signature != self.last_signature:
-            LOG.debug("Track changed; refreshing persistent battery background")
-            self.overlay_worker.refresh_persistent("battery")
-        self.last_signature = signature
-
-    def _run(self) -> None:
-        while not self.stop_event.wait(self.interval):
-            self._check_once()
 
 
 class ButtonMapper:
@@ -1800,9 +1757,10 @@ def run(args: argparse.Namespace) -> int:
     signal.signal(signal.SIGINT, stop)
 
     overlay_worker = OverlayWorker()
-    battery_monitor = BatteryMonitor(overlay_worker, args.battery_threshold)
-    background_watcher = PersistentBackgroundWatcher(
-        args.moode_url, overlay_worker,
+    battery_monitor = BatteryMonitor(
+        overlay_worker,
+        args.battery_threshold,
+        args.battery_critical_threshold,
     )
     renderer_guard = RendererGuard(
         args.moode_url,
@@ -1830,7 +1788,6 @@ def run(args: argparse.Namespace) -> int:
         battery_display_action=battery_monitor.show_current,
     )
     overlay_worker.start()
-    background_watcher.start()
     worker.start()
     screen_clicker.start()
 
@@ -1861,6 +1818,9 @@ def run(args: argparse.Namespace) -> int:
                     args.keepalive,
                     args.battery_check,
                     args.battery_low_check,
+                    args.battery_critical_check,
+                    args.battery_threshold,
+                    args.battery_critical_threshold,
                 )
             except (ConnectionError, OSError, PermissionError) as exc:
                 if stop_event.is_set():
@@ -1885,7 +1845,6 @@ def run(args: argparse.Namespace) -> int:
     finally:
         screen_clicker.stop()
         worker.stop()
-        background_watcher.stop()
         overlay_worker.stop()
     return 0
 
@@ -1924,10 +1883,22 @@ def parse_args() -> argparse.Namespace:
         help="seconds between battery checks while below the low threshold",
     )
     parser.add_argument(
+        "--battery-critical-check",
+        type=float,
+        default=float(env("SIRI_BATTERY_CRITICAL_CHECK_SECONDS", "60")),
+        help="seconds between battery checks while below the critical threshold",
+    )
+    parser.add_argument(
         "--battery-threshold",
         type=int,
         default=int(env("SIRI_BATTERY_LOW_PERCENT", "10")),
-        help="show the persistent empty-battery overlay below this percentage",
+        help="show a one-second battery warning below this percentage",
+    )
+    parser.add_argument(
+        "--battery-critical-threshold",
+        type=int,
+        default=int(env("SIRI_BATTERY_CRITICAL_PERCENT", "5")),
+        help="flash the battery warning three times below this percentage",
     )
     parser.add_argument(
         "--reclaim-busy",
@@ -1953,8 +1924,12 @@ def parse_args() -> argparse.Namespace:
         parser.error("battery check interval cannot be negative")
     if args.battery_low_check < 0:
         parser.error("low-battery check interval cannot be negative")
+    if args.battery_critical_check < 0:
+        parser.error("critical-battery check interval cannot be negative")
     if not 1 <= args.battery_threshold <= 100:
         parser.error("battery threshold must be between 1 and 100")
+    if not 1 <= args.battery_critical_threshold < args.battery_threshold:
+        parser.error("critical battery threshold must be below the low threshold")
     parse_mac(args.mac)
     return args
 
