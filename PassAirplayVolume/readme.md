@@ -1,4 +1,4 @@
-# Pass Airplay volume to MoOdeAudio
+# Pass Airplay volume to moOde audioplayer
 Because my CamillaDSP setup uses volume-based loudness, I do not want external renderers such as AirPlay to control the local output volume. To prevent this, run the following patch. It comments out the part of `spspre.sh` that sets the local volume to 0 dB when an AirPlay session starts.
 
 ```bash
@@ -15,7 +15,7 @@ sudo sed -i -E 's|^[[:space:]]*(//[[:space:]]*)?ignore_volume_control[[:space:]]
 sudo systemctl restart shairport-sync
 ```
 
-Finally, even though Shairport Sync ignores AirPlay volume control, we still want to pass the AirPlay volume value through to moOde Audio. This allows us to control the moOde volume from the AirPlay device.
+Finally, even though Shairport Sync ignores AirPlay volume control, we still want to pass the AirPlay volume value through to moOde. This allows us to control the moOde volume from the AirPlay device.
 
 For this, we use Shairport Sync’s `run_this_when_volume_is_set` option. Shairport Sync uses a volume range of `-30..0`, while moOde Audio uses `0..100`, so we need a small conversion script.
 
