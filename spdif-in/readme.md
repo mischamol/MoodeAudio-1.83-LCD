@@ -89,7 +89,7 @@ or even easier
 
 <img width="477" height="182" alt="Screenshot 2026-02-01 at 13 53 56" src="https://github.com/user-attachments/assets/35d4d60f-58c0-44a6-876a-5bdc042a6cd8" />
 
-Finally, probably because MoOde has some issues with this strange url format, it does not accept uploaded logos as metadata. Therefore, I manually copied `spdif.jpg` to `/var/local/www/imagesw/radio-logos/`, adjusted the permissions, and added an elif clause to the `getMetaData` function in `lcd_updater.py`.
+Finally, probably because moOde has some issues with this strange url format, it does not accept uploaded logos as metadata. Therefore, I manually copied `spdif.jpg` to `/var/local/www/imagesw/radio-logos/`, adjusted the permissions, and added an elif clause to the `getMetaData` function in `lcd_updater.py`.
 ```
 sudo mv spdif.jpg /var/local/www/imagesw/radio-logos/
 sudo chown root:root spdif.jpg
