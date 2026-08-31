@@ -1,5 +1,5 @@
-# MoodeAudio Metadata on Waveshare 1.83-inch LCD
-Script for displaying coverart and some basic information (volume, state and mute) from MoodeAudio on Waveshare 1.83 inch lcd screen. Currently the script supports metadata from local files, radio streams, Spotify and Airplay. This script uses the library files and fonts that came with the Waveshare example (included in the `lib` folder). The original example can be found here: https://www.waveshare.com/wiki/1.83inch_LCD_Module.<br>
+# moOde audioplayer Metadata on Waveshare 1.83-inch LCD
+Script for displaying coverart and some basic information (volume, state and mute) from moOde on Waveshare 1.83 inch lcd screen. Currently the script supports metadata from local files, radio streams, Spotify and Airplay. This script uses the library files and fonts that came with the Waveshare example (included in the `lib` folder). The original example can be found here: https://www.waveshare.com/wiki/1.83inch_LCD_Module.<br>
 
 <img src="https://github.com/user-attachments/assets/d258697a-e3ea-450f-969d-3c5b2cd47aeb" style="width:300px; height:auto;"><br>
 
@@ -13,14 +13,14 @@ Connect the screen according to the diagram below.
 Enable SPI: `sudo raspi-config` ➡ Interface Options ➡ enable SPI.
 
 ## Installation
-You can place `lcd_updater.py` and the `lib` folder under `/var/local/www/commandw/` and enable the LCD updater in MoodeAudio under ➡ Configure ➡ Peripherals. 
+You can place `lcd_updater.py` and the `lib` folder under `/var/local/www/commandw/` and enable the LCD updater in moOde under ➡ Configure ➡ Peripherals. 
 
 Set the permissions: `sudo chmod 755 lcd_updater.py` and `sudo chmod -R 755 lib`
 
 ⚠ Note: `lcd_updater.py` is replaced with a stub after every update, so keep a backup elsewhere. Additionally, use a systemd watcher on `spotmeta.txt` and `aplmeta.txt` to include Spotify and Airplay metadata .
 
 ## Alternative Installation Method
-Instead of enabling the LCD updater in MoodeAudio, you can also only enable the metadata file under ➡ Configure ➡ Audio ➡ MPD Options and use a systemd watcher for `currentsong.txt`. As a result, you can place this repository wherever you want—for example, in your home folder (~), which remains untouched during updates. Personally, I prefer this method, as I got tired of copying everything back after every update.
+Instead of enabling the LCD updater in moOde, you can also only enable the metadata file under ➡ Configure ➡ Audio ➡ MPD Options and use a systemd watcher for `currentsong.txt`. As a result, you can place this repository wherever you want—for example, in your home folder (~), which remains untouched during updates. Personally, I prefer this method, as I got tired of copying everything back after every update.
 
 Ensure the correct permissions: `sudo chmod -R 755 lcd`
 
