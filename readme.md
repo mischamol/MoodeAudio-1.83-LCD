@@ -1,4 +1,4 @@
-# MoodeAudioProjects
-Collection of various MoodeAudioProjects I did over the years. Some are recent, some haven’t been maintained over the years. Use them if you like, ignore them if you don’t.
+# moOde audioplayer Projects
+Collection of various moOde audioplayer projects I did over the years. Some are recent, some haven’t been maintained over the years. Use them if you like, ignore them if you don’t.
 
 <img width="720" height="1280" alt="image" src="https://github.com/user-attachments/assets/60b8e11d-af85-47a3-a379-20a255213ca4" />
