@@ -32,7 +32,7 @@ if [ $WEBUI_SHOW = "1" ]; then
 	--kiosk
 ```
 For landscape mode also edit `/boot/firmware/cmdline.txt` and add the folowing to the end of the line (not a newline): `video=DSI-1:720x1280@60,rotate=<rotation-value>`
-Strangely the rotation is exactly opposite to MoOdeAudio, so if you rotate 90 degrees in moode, here it should state 270 degrees.
+Strangely the rotation is exactly opposite to moOde audioplayer, so if you rotate 90 degrees in moOde, here it should state 270 degrees.
 
 <img width="640" height="481" alt="image" src="https://github.com/user-attachments/assets/325c2474-fea0-4634-8129-d9dd1f1c187c" />
 
