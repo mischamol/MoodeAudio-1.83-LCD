@@ -1,5 +1,5 @@
-# S/PDIF input to MoOdeAudio
-Because Apple Music is, for obvious reasons, not supported on MoOde, I needed a way to get audio from my Apple TV into CamillaDSP running on MoOde. Since I already had an S/PDIF signal coming from my TV, this seemed like a logical starting point. After some quick online searching in the usual places, I found a USB sound card with an S/PDIF input for about €9.
+# S/PDIF input to moOde audioplayer
+Because Apple Music is, for obvious reasons, not supported on moOde, I needed a way to get audio from my Apple TV into CamillaDSP running on moOde. Since I already had an S/PDIF signal coming from my TV, this seemed like a logical starting point. After some quick online searching in the usual places, I found a USB sound card with an S/PDIF input for about €9.
 
 ![images](https://github.com/user-attachments/assets/c7bf6416-f67d-4f25-b8a8-db5e39aed71a)
 
