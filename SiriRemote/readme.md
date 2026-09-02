@@ -356,9 +356,9 @@ The daemon uses the X11, Cairo, and Lato components already present on moOde to
 show a one-second circular overlay. It does not install a compositor or another
 package and does not modify moOde files. The anthracite circle uses 60% opacity
 and retains 40% of the captured screen, keeping the background clearly visible.
-A thin light-grey border, regular-weight labels, and bold primary values match
-the visual hierarchy of the moOde interface. On the tested 720 x 1280 portrait
-display, the overlay center is aligned exactly with the cover-art center.
+Regular-weight labels and bold primary values match the visual hierarchy of
+the moOde interface. On the tested 720 x 1280 portrait display, the overlay
+center is aligned exactly with the cover-art center.
 
 - Play/Pause uses the resulting state returned by `toggle_play_pause`.
 - Volume uses the actual percentage returned by `set_volume`.

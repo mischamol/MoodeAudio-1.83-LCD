@@ -758,8 +758,6 @@ class X11Overlay:
     MOODE_GREY = 0x303030
     MOODE_TEXT = (240 / 255.0, 240 / 255.0, 240 / 255.0)
     OVERLAY_OPACITY = 0.60
-    OVERLAY_BORDER_OPACITY = 0.38
-    OVERLAY_BORDER_WIDTH = 0.004
     REPAINT_SETTLE_SECONDS = 0.05
     COVER_CENTER_Y_RATIO = 0.284375
     SHUTDOWN_LABEL_CENTER_Y = 0.30
@@ -1071,16 +1069,6 @@ class X11Overlay:
             )
 
         try:
-            cairo.cairo_set_source_rgba(
-                context, *cls.MOODE_TEXT, cls.OVERLAY_BORDER_OPACITY,
-            )
-            cairo.cairo_set_line_width(context, size * cls.OVERLAY_BORDER_WIDTH)
-            cairo.cairo_new_path(context)
-            cairo.cairo_arc(
-                context, size * 0.50, size * 0.50, size * 0.478,
-                0.0, 6.283185307179586,
-            )
-            cairo.cairo_stroke(context)
             cairo.cairo_set_source_rgb(context, *cls.MOODE_TEXT)
             if text == "PLAY":
                 polygon([

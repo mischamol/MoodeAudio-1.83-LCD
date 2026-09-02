@@ -367,8 +367,6 @@ class X11OverlayTests(unittest.TestCase):
         self.assertEqual(remote.X11Overlay.MOODE_GREY, 0x303030)
         self.assertEqual(remote.X11Overlay.MOODE_TEXT, (240 / 255.0,) * 3)
         self.assertEqual(remote.X11Overlay.OVERLAY_OPACITY, 0.60)
-        self.assertEqual(remote.X11Overlay.OVERLAY_BORDER_OPACITY, 0.38)
-        self.assertEqual(remote.X11Overlay.OVERLAY_BORDER_WIDTH, 0.004)
         self.assertEqual(remote.X11Overlay.REPAINT_SETTLE_SECONDS, 0.05)
         self.assertEqual(remote.X11Overlay.COVER_CENTER_Y_RATIO, 0.284375)
 

@@ -138,8 +138,8 @@ De standaardduur is één seconde en is instelbaar met
 `SIRI_OVERLAY_SECONDS`; zet `SIRI_OVERLAY=no` om de overlay uit te schakelen.
 De nep-transparante achtergrond wordt met de reeds aanwezige X11-, Cairo- en
 Lato-componenten opgebouwd. De antraciete cirkel gebruikt 60% dekking en
-behoudt 40% van het vastgelegde scherm. Een dunne lichtgrijze rand, labels in
-normale letterdikte en vette hoofdwaarden volgen de visuele hiërarchie van
+behoudt 40% van het vastgelegde scherm. Labels in normale letterdikte en vette
+hoofdwaarden volgen de visuele hiërarchie van
 moOde. Op het geteste 720 x 1280-portretscherm valt het middelpunt van de
 overlay exact samen met het middelpunt van de coverart. Na het verbergen krijgt
 Chromium kort tijd om de achtergrond opnieuw te
