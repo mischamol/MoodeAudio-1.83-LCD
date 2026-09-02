@@ -456,11 +456,25 @@ ATT notifications have been enabled, in which case the daemon cannot see which
 button caused the wake-up and no battery overlay appears. The button can also
 start the remote's Siri voice mode, which may reset the Bluetooth ATT connection.
 
+This happens because the Microphone button is not only an ordinary HID button on
+the first-generation Siri Remote. It also activates the remote's voice/audio path.
+The userspace daemon handles the HID reports over raw ATT, but it does not
+implement Apple's Siri audio protocol. When the remote is asleep, the daemon must
+first reconnect, subscribe to handle `0x0024`, and activate input with `0xAF` on
+handle `0x001d`. The wake-up press may already be over before those steps finish.
+If the remote proceeds into voice mode, it can close the existing ATT transport.
+
 While the daemon reconnects, subsequent buttons can appear unresponsive. A normal
 button may need to be pressed a second time after the connection becomes ready.
 For predictable battery display, first wake the remote with an ordinary button
 and press Microphone after it has connected. Home remains reserved exclusively
 for the three-second shutdown action.
+
+An automatic forced disconnect through BlueZ is deliberately not used as a
+workaround. Testing showed that this can race with the daemon's raw ATT reconnect:
+BlueZ may then own the connection while the daemon remains at `Connecting`, which
+causes much longer delays for every button. The stable behavior is therefore to
+let the normal reconnect loop recover without forcibly resetting BlueZ.
 
 ## Troubleshooting
 
