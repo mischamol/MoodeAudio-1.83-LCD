@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import errno
 import os
 import unittest
 from unittest import mock
@@ -547,6 +548,16 @@ class RawAttClientTests(unittest.TestCase):
                     client.battery_interval(900, 300, 60, 10, 5),
                     interval,
                 )
+
+
+class ConnectionRecoveryTests(unittest.TestCase):
+    def test_connection_reset_requires_controller_cleanup(self):
+        for error_number in (errno.ECONNRESET, errno.ECONNABORTED, errno.ENOTCONN):
+            with self.subTest(error_number=error_number):
+                self.assertTrue(remote.is_peer_reset(OSError(error_number, "lost")))
+
+    def test_timeout_does_not_trigger_peer_reset_cleanup(self):
+        self.assertFalse(remote.is_peer_reset(TimeoutError(errno.ETIMEDOUT, "timeout")))
 
 
 

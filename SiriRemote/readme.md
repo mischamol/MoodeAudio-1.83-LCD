@@ -442,10 +442,14 @@ enable debug logging, observe its `Input notification`, and update the mask.
 
 Clicking the Microphone/Siri button immediately shows the most recently measured
 battery percentage in the same battery overlay. It does not issue a concurrent
-ATT read. Configure the button code with:
+ATT read. On this first-generation remote, entering Siri voice mode can reset the
+ATT connection. The daemon clears the stale controller state and reconnects so
+ordinary buttons remain available; a microphone press used to wake a disconnected
+remote can therefore fail to show an overlay. Configure the button code with:
 
 ```text
 SIRI_MIC_BUTTON_MASK=0x10
+SIRI_RECOVER_PEER_RESET=yes
 ```
 
 ## Troubleshooting
