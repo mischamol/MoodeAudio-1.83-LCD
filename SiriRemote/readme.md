@@ -448,6 +448,20 @@ ATT read. Configure the button code with:
 SIRI_MIC_BUTTON_MASK=0x10
 ```
 
+## Known limitation: Microphone button after sleep
+
+The Microphone/Siri button is not a completely reliable first button after the
+remote has disconnected or gone to sleep. The press can wake the remote before
+ATT notifications have been enabled, in which case the daemon cannot see which
+button caused the wake-up and no battery overlay appears. The button can also
+start the remote's Siri voice mode, which may reset the Bluetooth ATT connection.
+
+While the daemon reconnects, subsequent buttons can appear unresponsive. A normal
+button may need to be pressed a second time after the connection becomes ready.
+For predictable battery display, first wake the remote with an ordinary button
+and press Microphone after it has connected. Home remains reserved exclusively
+for the three-second shutdown action.
+
 ## Troubleshooting
 
 ### Connection timed out
