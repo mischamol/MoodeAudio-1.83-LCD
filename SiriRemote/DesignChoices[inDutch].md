@@ -137,7 +137,14 @@ volgende interval gekozen. Er zijn geen parallelle ATT-reads.
 De standaardduur is één seconde en is instelbaar met
 `SIRI_OVERLAY_SECONDS`; zet `SIRI_OVERLAY=no` om de overlay uit te schakelen.
 De nep-transparante achtergrond wordt met de reeds aanwezige X11-, Cairo- en
-Lato-componenten opgebouwd. Er worden geen moOde-bestanden gewijzigd.
+Lato-componenten opgebouwd. De antraciete cirkel gebruikt 60% dekking en
+behoudt 40% van het vastgelegde scherm. Een dunne lichtgrijze rand, labels in
+normale letterdikte en vette hoofdwaarden volgen de visuele hiërarchie van
+moOde. Na het verbergen krijgt Chromium kort tijd om de achtergrond opnieuw te
+tekenen, zodat een oude overlay niet onder de volgende melding blijft staan.
+Het laatste power-symbool bij shutdown gebruikt
+exact dezelfde positie en grootte als tijdens het aftellen. Er worden geen
+moOde-bestanden gewijzigd.
 De overlay is klikdoorlatend, zodat Menu/Back ook tijdens een batterijmelding
 blijft werken.
 

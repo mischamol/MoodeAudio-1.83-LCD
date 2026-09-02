@@ -755,8 +755,14 @@ class X11Overlay:
 
     CW_OVERRIDE_REDIRECT = 1 << 9
     ZPIXMAP = 2
-    MOODE_GREY = 0x808080
+    MOODE_GREY = 0x303030
     MOODE_TEXT = (240 / 255.0, 240 / 255.0, 240 / 255.0)
+    OVERLAY_OPACITY = 0.60
+    OVERLAY_BORDER_OPACITY = 0.38
+    OVERLAY_BORDER_WIDTH = 0.004
+    REPAINT_SETTLE_SECONDS = 0.05
+    SHUTDOWN_LABEL_CENTER_Y = 0.30
+    SHUTDOWN_RING_CENTER_Y = 0.64
     SYMBOLS = {"PLAY", "PAUSE", "NEXT", "PREVIOUS", "BATTERY"}
     FONT_5X7 = {
         " ": ("00000",) * 7,
@@ -1034,7 +1040,7 @@ class X11Overlay:
             cairo.cairo_close_path(context)
             cairo.cairo_fill(context)
 
-        def power_ring(center_y: float, digit: str | None = None) -> None:
+        def power_ring(center_y: float, content: str | None = None) -> None:
             cairo.cairo_set_line_width(context, size * 0.026)
             cairo.cairo_new_path(context)
             cairo.cairo_arc(
@@ -1046,12 +1052,34 @@ class X11Overlay:
             cairo.cairo_move_to(context, size * 0.50, size * (center_y - 0.24))
             cairo.cairo_line_to(context, size * 0.50, size * (center_y - 0.11))
             cairo.cairo_stroke(context)
-            if digit is not None:
+            if content is not None:
+                content_size = size * (0.285 if len(content) == 1 else 0.14)
                 centered(
-                    digit, size * 0.285, size * (center_y + 0.035), bold=True,
+                    content, content_size,
+                    size * (center_y + 0.035), bold=True,
                 )
 
+        def shutdown_label(label: str) -> None:
+            reference_size = size * 0.285
+            reference_width = text_width("60%", reference_size, bold=True)
+            label_width = text_width(label, reference_size, bold=False)
+            label_size = reference_size * reference_width / label_width
+            centered(
+                label, label_size * 0.92,
+                size * cls.SHUTDOWN_LABEL_CENTER_Y, bold=False,
+            )
+
         try:
+            cairo.cairo_set_source_rgba(
+                context, *cls.MOODE_TEXT, cls.OVERLAY_BORDER_OPACITY,
+            )
+            cairo.cairo_set_line_width(context, size * cls.OVERLAY_BORDER_WIDTH)
+            cairo.cairo_new_path(context)
+            cairo.cairo_arc(
+                context, size * 0.50, size * 0.50, size * 0.478,
+                0.0, 6.283185307179586,
+            )
+            cairo.cairo_stroke(context)
             cairo.cairo_set_source_rgb(context, *cls.MOODE_TEXT)
             if text == "PLAY":
                 polygon([
@@ -1123,9 +1151,9 @@ class X11Overlay:
                 percentage = text.partition(":")[2]
                 percentage_size = size * 0.285
                 target_width = text_width(percentage, percentage_size, bold=True)
-                label_width = text_width("Volume:", percentage_size, bold=True)
+                label_width = text_width("Volume:", percentage_size, bold=False)
                 label_size = percentage_size * target_width / label_width
-                centered("Volume:", label_size, size * 0.37, bold=True)
+                centered("Volume:", label_size * 0.92, size * 0.37, bold=False)
                 centered(percentage, percentage_size, size * 0.57, bold=True)
             elif text.startswith("DISABLED:"):
                 renderer_key = text.partition(":")[2]
@@ -1150,15 +1178,11 @@ class X11Overlay:
                     centered(renderer, renderer_size, size * 0.57, bold=True)
             elif text.startswith("SHUTDOWN:"):
                 countdown = text.partition(":")[2]
-                countdown_size = size * 0.285
-                reference_width = text_width("60%", countdown_size, bold=True)
-                volume_width = text_width("Volume:", countdown_size, bold=True)
-                label_size = countdown_size * reference_width / volume_width
-                centered("Shutdown:", label_size, size * 0.30, bold=True)
-                power_ring(0.64, countdown)
+                shutdown_label("Shutdown:")
+                power_ring(cls.SHUTDOWN_RING_CENTER_Y, countdown)
             elif text == "SHUTTING DOWN":
-                power_ring(0.47)
-                centered("Shutting down...", size * 0.068, size * 0.76)
+                shutdown_label("Shutdown")
+                power_ring(cls.SHUTDOWN_RING_CENTER_Y, "0")
             else:
                 font_size = size * 0.27
                 max_width = size * 0.78
@@ -1193,7 +1217,8 @@ class X11Overlay:
                     try:
                         channel = ((cls.MOODE_GREY >> 16) & 0xFF) / 255.0
                         cairo.cairo_set_source_rgba(
-                            context, channel, channel, channel, 0.85,
+                            context, channel, channel, channel,
+                            cls.OVERLAY_OPACITY,
                         )
                         cairo.cairo_new_path(context)
                         cairo.cairo_arc(
@@ -1220,7 +1245,9 @@ class X11Overlay:
                     pixel = x11.XGetPixel(image, x, y)
                     x11.XPutPixel(
                         image, x, y,
-                        cls._blend_pixel(pixel, cls.MOODE_GREY, 0.85),
+                        cls._blend_pixel(
+                            pixel, cls.MOODE_GREY, cls.OVERLAY_OPACITY,
+                        ),
                     )
 
     def show_sequence(
@@ -1307,6 +1334,9 @@ class X11Overlay:
                     break
         finally:
             if window:
+                x11.XUnmapWindow(display, window)
+                x11.XSync(display, False)
+                time.sleep(self.REPAINT_SETTLE_SECONDS)
                 x11.XDestroyWindow(display, window)
             if gc:
                 x11.XFreeGC(display, gc)

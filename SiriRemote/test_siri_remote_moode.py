@@ -364,8 +364,16 @@ class X11OverlayTests(unittest.TestCase):
         )
 
     def test_overlay_colors_match_moode_defaults(self):
-        self.assertEqual(remote.X11Overlay.MOODE_GREY, 0x808080)
+        self.assertEqual(remote.X11Overlay.MOODE_GREY, 0x303030)
         self.assertEqual(remote.X11Overlay.MOODE_TEXT, (240 / 255.0,) * 3)
+        self.assertEqual(remote.X11Overlay.OVERLAY_OPACITY, 0.60)
+        self.assertEqual(remote.X11Overlay.OVERLAY_BORDER_OPACITY, 0.38)
+        self.assertEqual(remote.X11Overlay.OVERLAY_BORDER_WIDTH, 0.004)
+        self.assertEqual(remote.X11Overlay.REPAINT_SETTLE_SECONDS, 0.05)
+
+    def test_shutdown_ring_position_is_shared_by_countdown_and_final_frame(self):
+        self.assertEqual(remote.X11Overlay.SHUTDOWN_LABEL_CENTER_Y, 0.30)
+        self.assertEqual(remote.X11Overlay.SHUTDOWN_RING_CENTER_Y, 0.64)
 
     def test_overlay_is_centered_inside_portrait_cover(self):
         size, left, top = remote.X11Overlay._overlay_geometry(720, 1280)
