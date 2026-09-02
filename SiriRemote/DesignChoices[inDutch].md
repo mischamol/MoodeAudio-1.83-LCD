@@ -140,7 +140,9 @@ De nep-transparante achtergrond wordt met de reeds aanwezige X11-, Cairo- en
 Lato-componenten opgebouwd. De antraciete cirkel gebruikt 60% dekking en
 behoudt 40% van het vastgelegde scherm. Een dunne lichtgrijze rand, labels in
 normale letterdikte en vette hoofdwaarden volgen de visuele hiërarchie van
-moOde. Na het verbergen krijgt Chromium kort tijd om de achtergrond opnieuw te
+moOde. Op het geteste 720 x 1280-portretscherm valt het middelpunt van de
+overlay exact samen met het middelpunt van de coverart. Na het verbergen krijgt
+Chromium kort tijd om de achtergrond opnieuw te
 tekenen, zodat een oude overlay niet onder de volgende melding blijft staan.
 Het laatste power-symbool bij shutdown gebruikt
 exact dezelfde positie en grootte als tijdens het aftellen. Er worden geen

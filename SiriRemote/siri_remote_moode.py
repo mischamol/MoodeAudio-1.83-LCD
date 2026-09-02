@@ -761,6 +761,7 @@ class X11Overlay:
     OVERLAY_BORDER_OPACITY = 0.38
     OVERLAY_BORDER_WIDTH = 0.004
     REPAINT_SETTLE_SECONDS = 0.05
+    COVER_CENTER_Y_RATIO = 0.284375
     SHUTDOWN_LABEL_CENTER_Y = 0.30
     SHUTDOWN_RING_CENTER_Y = 0.64
     SYMBOLS = {"PLAY", "PAUSE", "NEXT", "PREVIOUS", "BATTERY"}
@@ -955,8 +956,8 @@ class X11Overlay:
         height = 7 * scale
         return clean, scale, width, height
 
-    @staticmethod
-    def _overlay_geometry(width: int, height: int) -> tuple[int, int, int]:
+    @classmethod
+    def _overlay_geometry(cls, width: int, height: int) -> tuple[int, int, int]:
         if width <= 0 or height <= 0:
             raise RuntimeError("invalid X11 display dimensions")
         # moOde's portrait cover is centered horizontally near the top and is
@@ -964,7 +965,7 @@ class X11Overlay:
         # inside that artwork and align both centers.
         size = max(280, min(536, int(width * 0.745), height - 24))
         left = (width - size) // 2
-        cover_center_y = int(height * 0.295)
+        cover_center_y = round(height * cls.COVER_CENTER_Y_RATIO)
         top = max(12, min(height - size - 12, cover_center_y - size // 2))
         return size, left, top
 
