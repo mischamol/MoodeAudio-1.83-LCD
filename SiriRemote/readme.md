@@ -212,41 +212,32 @@ SIRI_IGNORE_DURING_RENDERER=yes
 SIRI_RENDERER_CACHE_SECONDS=0.25
 ```
 
-## 5. Copy the software from Windows
+## 5. Download the software from GitHub
 
-If necessary, obtain the Raspberry Pi IP address by running this on the Pi:
+Run the following commands directly on the Raspberry Pi:
 
 ```sh
-hostname -I
+cd ~
+git clone --depth 1 https://github.com/mischamol/moOdeAudioProjects.git
+cd moOdeAudioProjects/SiriRemote
 ```
 
-On the Windows computer, open PowerShell and upload the package:
+The source is maintained in the
+[SiriRemote directory](https://github.com/mischamol/moOdeAudioProjects/tree/main/SiriRemote).
 
-```powershell
-scp "C:\path\to\siri-remote-moode.zip" username@moode:~/
-```
+If the repository was cloned previously, update that checkout instead:
 
-Replace `username` with the SSH username. If the hostname `moode` cannot be
-resolved, use the IP address:
-
-```powershell
-scp "C:\path\to\siri-remote-moode.zip" username@192.168.1.50:~/
-```
-
-Connect to the Pi:
-
-```powershell
-ssh username@moode
+```sh
+cd ~/moOdeAudioProjects
+git pull --ff-only
+cd SiriRemote
 ```
 
 ## 6. Install the daemon
 
-On the Raspberry Pi:
+From the `SiriRemote` directory on the Raspberry Pi:
 
 ```sh
-cd ~
-unzip -o siri-remote-moode.zip -d siri-remote-moode
-cd siri-remote-moode
 sudo sh ./install.sh 70:48:0F:F2:65:99
 ```
 
