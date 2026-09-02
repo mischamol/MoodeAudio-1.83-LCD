@@ -61,7 +61,6 @@ sed -i 's/^SIRI_SECURITY=.*/SIRI_SECURITY=medium/' /etc/default/siri-remote-mood
 sed -i 's/^RECONNECT_MIN=.*/RECONNECT_MIN=0.2/' /etc/default/siri-remote-moode
 sed -i 's/^RECONNECT_MAX=.*/RECONNECT_MAX=1/' /etc/default/siri-remote-moode
 grep -q '^SIRI_RECLAIM_BUSY=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_RECLAIM_BUSY=yes' >> /etc/default/siri-remote-moode
-grep -q '^SIRI_RECOVER_PEER_RESET=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_RECOVER_PEER_RESET=yes' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_DEBUG=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_DEBUG=no' >> /etc/default/siri-remote-moode
 
 systemctl daemon-reload

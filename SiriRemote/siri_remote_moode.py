@@ -1745,17 +1745,8 @@ class ButtonMapper:
                 self.worker.submit(name, command)
 
 
-def is_peer_reset(exc: BaseException) -> bool:
-    """Return whether the remote explicitly reset/aborted the ATT link."""
-    return isinstance(exc, OSError) and exc.errno in (
-        errno.ECONNRESET,
-        errno.ECONNABORTED,
-        errno.ENOTCONN,
-    )
-
-
-def reclaim_att_channel(mac: str, reason: str = "busy ATT channel") -> None:
-    """Ask BlueZ to clear a stale controller connection before reconnecting."""
+def reclaim_att_channel(mac: str) -> None:
+    """Ask BlueZ to release a connection it acquired before the raw client."""
     try:
         result = subprocess.run(
             ["/usr/bin/bluetoothctl", "disconnect", mac],
@@ -1770,7 +1761,7 @@ def reclaim_att_channel(mac: str, reason: str = "busy ATT channel") -> None:
             if any(word in line.lower() for word in ("disconnect", "failed", "not available"))
         ]
         output = (interesting or lines or [f"exit {result.returncode}"])[-1]
-        LOG.warning("BlueZ disconnect after %s: %s", reason, output[:500])
+        LOG.warning("BlueZ disconnect after busy ATT channel: %s", output[:500])
     except (OSError, subprocess.SubprocessError) as exc:
         LOG.error("Could not ask BlueZ to release the ATT channel: %s", exc)
 
@@ -1824,7 +1815,6 @@ def run(args: argparse.Namespace) -> int:
         while not stop_event.is_set():
             client = RawAttClient(args.mac, args.address_type, args.security)
             att_busy = False
-            peer_reset = False
             client.notification_handler = mapper.notification
             client.battery_handler = battery_monitor.update
             mapper.reset()
@@ -1861,21 +1851,12 @@ def run(args: argparse.Namespace) -> int:
                         exc,
                     )
                 else:
-                    peer_reset = is_peer_reset(exc)
                     LOG.warning("Bluetooth connection lost/failed: %s", exc)
             finally:
                 client.close()
                 mapper.reset()
             if att_busy and args.reclaim_busy:
                 reclaim_att_channel(args.mac)
-                delay = args.reconnect_min
-            elif peer_reset and args.recover_peer_reset:
-                # The Siri/Microphone button can make this Gen-1 remote reset
-                # its ATT transport while entering voice mode. Clear any
-                # controller-side remnant before retrying; otherwise the next
-                # blocking connect can remain stuck for tens of seconds and
-                # swallow wake presses from ordinary buttons.
-                reclaim_att_channel(args.mac, "peer reset")
                 delay = args.reconnect_min
             if not stop_event.wait(delay):
                 LOG.info("Reconnecting (next backoff %.1fs)", min(delay * 2, args.reconnect_max))
@@ -1942,13 +1923,6 @@ def parse_args() -> argparse.Namespace:
         "--reclaim-busy",
         action=argparse.BooleanOptionalAction,
         default=env("SIRI_RECLAIM_BUSY", "yes").lower() in ("1", "yes", "true", "on"),
-    )
-    parser.add_argument(
-        "--recover-peer-reset",
-        action=argparse.BooleanOptionalAction,
-        default=env("SIRI_RECOVER_PEER_RESET", "yes").lower()
-        in ("1", "yes", "true", "on"),
-        help="clear stale Bluetooth state after a remote-initiated ATT reset",
     )
     parser.add_argument("--reconnect-min", type=float, default=float(env("RECONNECT_MIN", "0.2")))
     parser.add_argument("--reconnect-max", type=float, default=float(env("RECONNECT_MAX", "1")))
