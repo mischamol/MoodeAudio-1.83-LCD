@@ -758,6 +758,8 @@ class X11Overlay:
     MOODE_GREY = 0x303030
     MOODE_TEXT = (240 / 255.0, 240 / 255.0, 240 / 255.0)
     OVERLAY_OPACITY = 0.60
+    OVERLAY_BORDER_OPACITY = 0.38
+    OVERLAY_BORDER_WIDTH = 0.004
     REPAINT_SETTLE_SECONDS = 0.05
     COVER_CENTER_Y_RATIO = 0.284375
     SHUTDOWN_LABEL_CENTER_Y = 0.30
@@ -1069,6 +1071,16 @@ class X11Overlay:
             )
 
         try:
+            cairo.cairo_set_source_rgba(
+                context, *cls.MOODE_TEXT, cls.OVERLAY_BORDER_OPACITY,
+            )
+            cairo.cairo_set_line_width(context, size * cls.OVERLAY_BORDER_WIDTH)
+            cairo.cairo_new_path(context)
+            cairo.cairo_arc(
+                context, size * 0.50, size * 0.50, size * 0.478,
+                0.0, 6.283185307179586,
+            )
+            cairo.cairo_stroke(context)
             cairo.cairo_set_source_rgb(context, *cls.MOODE_TEXT)
             if text == "PLAY":
                 polygon([
@@ -1487,7 +1499,6 @@ class BatteryMonitor:
         self.is_low = False
         self.is_critical = False
         self.last_level: int | None = None
-        self.pending_show = False
 
     def update(self, level: int) -> bool:
         if not 0 <= level <= 100:
@@ -1526,18 +1537,7 @@ class BatteryMonitor:
         self.is_low = low
         self.is_critical = critical
         self.last_level = level
-        if self.pending_show:
-            self.pending_show = False
-            self.overlay_worker.submit(f"BATTERY:{level}%")
         return low
-
-    def show_current(self) -> None:
-        if self.last_level is None:
-            LOG.info("Battery button clicked; waiting for initial battery reading")
-            self.pending_show = True
-            return
-        LOG.info("Battery button clicked; showing %d%%", self.last_level)
-        self.overlay_worker.submit(f"BATTERY:{self.last_level}%")
 
 
 class ButtonMapper:
@@ -1547,12 +1547,10 @@ class ButtonMapper:
         shutdown_action=None,
         screen_clicker: X11ClickWorker | None = None,
         overlay_worker: OverlayWorker | None = None,
-        battery_display_action=None,
     ) -> None:
         self.worker = worker
         self.screen_clicker = screen_clicker
         self.overlay_worker = overlay_worker
-        self.battery_display_action = battery_display_action
         self.previous = 0
         self.lock = threading.Lock()
         self.last_touch_x: int | None = None
@@ -1586,17 +1584,11 @@ class ButtonMapper:
         self.shutdown_action = shutdown_action or self._run_shutdown
         self.home_timer: threading.Timer | None = None
         self.home_fired = False
-        self.mic_mask = int(env("SIRI_MIC_BUTTON_MASK", "0x10"), 0)
-        if self.mic_mask <= 0 or self.mic_mask > 0xFF:
-            raise ValueError("SIRI_MIC_BUTTON_MASK must be between 0x01 and 0xff")
-        if self.mic_mask == self.home_mask:
-            raise ValueError("SIRI_MIC_BUTTON_MASK must differ from the Home mask")
         self.mapping = {
             BUTTON_AIRPLAY: ("AirPlay", env("MOODE_AIRPLAY_CMD", "")),
             BUTTON_VOLUME_UP: ("Volume +", env("MOODE_VOLUME_UP_CMD", "set_volume -up 5")),
             BUTTON_VOLUME_DOWN: ("Volume -", env("MOODE_VOLUME_DOWN_CMD", "set_volume -dn 5")),
             BUTTON_PLAY_PAUSE: ("Play/Pause", env("MOODE_PLAY_PAUSE_CMD", "toggle_play_pause")),
-            BUTTON_SIRI: ("Siri", env("MOODE_SIRI_CMD", "")),
             BUTTON_MENU: ("Menu/Back", env("MOODE_MENU_CMD", "")),
         }
 
@@ -1729,16 +1721,18 @@ class ButtonMapper:
 
         if touch_action is not None:
             self.worker.submit(*touch_action)
-        if newly_pressed & self.mic_mask and self.battery_display_action is not None:
-            self.battery_display_action()
-        if newly_pressed & BUTTON_MENU and self.screen_clicker is not None:
-            self.screen_clicker.submit()
+        if newly_pressed & BUTTON_MENU:
+            if self.screen_clicker is not None:
+                self.screen_clicker.submit()
+            else:
+                name, command = self.mapping[BUTTON_MENU]
+                if command:
+                    self.worker.submit(name, command)
         for mask, (name, command) in self.mapping.items():
             # The configured Home button is reserved for the long-press action
             # and must not also execute its normal short-press mapping.
             if (
                 mask != self.home_mask
-                and not (mask == self.mic_mask and self.battery_display_action is not None)
                 and not (mask == BUTTON_MENU and self.screen_clicker is not None)
                 and newly_pressed & mask
             ):
@@ -1804,7 +1798,6 @@ def run(args: argparse.Namespace) -> int:
         worker,
         screen_clicker=screen_clicker if screen_clicker.enabled else None,
         overlay_worker=overlay_worker if overlay_worker.enabled else None,
-        battery_display_action=battery_monitor.show_current,
     )
     overlay_worker.start()
     worker.start()

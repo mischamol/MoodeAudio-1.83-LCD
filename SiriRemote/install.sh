@@ -29,8 +29,10 @@ grep -q '^SIRI_TOUCH_MAX_AGE_SECONDS=' /etc/default/siri-remote-moode || printf 
 grep -q '^SIRI_HOME_BUTTON_MASK=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_HOME_BUTTON_MASK=0x01' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_HOME_HOLD_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_HOME_HOLD_SECONDS=3' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_HOME_COMMAND=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_HOME_COMMAND=/usr/bin/systemctl poweroff' >> /etc/default/siri-remote-moode
-grep -q '^SIRI_MIC_BUTTON_MASK=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_MIC_BUTTON_MASK=0x10' >> /etc/default/siri-remote-moode
-sed -i '/^SIRI_MIC_HOLD_SECONDS=/d' /etc/default/siri-remote-moode
+# Manual battery display and the Microphone/Siri button are intentionally unused.
+# Remove obsolete settings from installations that previously mapped either
+# Microphone/Siri or a long Menu press to battery display.
+sed -i '/^SIRI_MENU_HOLD_SECONDS=/d; /^SIRI_MIC_BUTTON_MASK=/d; /^SIRI_MIC_HOLD_SECONDS=/d; /^MOODE_SIRI_CMD=/d' /etc/default/siri-remote-moode
 # Local display click for Menu/Back. Determine the uid 1000 home directory so
 # the package does not assume a specific moOde account name.
 display_home=$(getent passwd 1000 | cut -d: -f6)

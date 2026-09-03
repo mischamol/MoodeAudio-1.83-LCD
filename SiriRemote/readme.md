@@ -195,8 +195,8 @@ Ordinary remote commands are ignored while moOde reports an external renderer
 as active, including AirPlay, Spotify Connect, Bluetooth, Squeezelite, and the
 other renderer flags exposed by `get_cfg_system`. This covers Play/Pause,
 Volume, Previous/Next, Menu/Back, and optional ordinary mappings. The
-Microphone/Siri battery display and the three-second Home shutdown always remain
-available, as does background battery monitoring. Pressing a blocked button
+three-second Home shutdown always remains available, as does background battery
+monitoring. Pressing a blocked button
 shows `Disabled:` plus the active renderer name for one second through the
 non-blocking latest-wins overlay. The display names are Bluetooth, AirPlay,
 Spotify, Deezer, Squeezelite, Plexamp, RoonBridge, Audio Input, and Multiroom
@@ -328,7 +328,7 @@ backoff between 0.2 and 1 second.
 | `00 02` | Volume Up | `set_volume -up 5` |
 | `00 04` | Volume Down | `set_volume -dn 5` |
 | `00 08` | Play/Pause | `toggle_play_pause` |
-| `00 10` | Microphone/Siri | Show battery percentage |
+| `00 10` | Microphone/Siri | Ignored |
 | `00 20` | Menu/Back | Alternate Playback and the last Library view |
 | Touchpad left + physical click | Previous track | `previous` |
 | Touchpad right + physical click | Next track | `next` |
@@ -341,7 +341,8 @@ either side. Configure this using `SIRI_TOUCH_X_SPLIT`,
 
 Menu/Back uses Python `ctypes` and the X11 libraries already required by the
 local moOde display to alternate between Playback and the last Library view.
-It clicks moOde's cover-art link rather than artist metadata, because moOde
+The action starts as soon as Menu is pressed. It clicks moOde's cover-art link
+rather than artist metadata, because moOde
 routes radio and file metadata clicks to different views. The cover link is
 source-independent. Before every click, the script reads moOde's persisted
 `current_view`, so manual navigation is respected: `playback,album` returns to
@@ -356,6 +357,7 @@ The daemon uses the X11, Cairo, and Lato components already present on moOde to
 show a one-second circular overlay. It does not install a compositor or another
 package and does not modify moOde files. The anthracite circle uses 60% opacity
 and retains 40% of the captured screen, keeping the background clearly visible.
+A thin, partially transparent white outline separates it from the cover art.
 Regular-weight labels and bold primary values match the visual hierarchy of
 the moOde interface. On the tested 720 x 1280 portrait display, the overlay
 center is aligned exactly with the cover-art center.
@@ -440,41 +442,11 @@ The Home button must remain pressed continuously for three seconds. Releasing
 it earlier cancels the shutdown and performs no other action. If another remote reports a different Home code,
 enable debug logging, observe its `Input notification`, and update the mask.
 
-Clicking the Microphone/Siri button immediately shows the most recently measured
-battery percentage in the same battery overlay. It does not issue a concurrent
-ATT read. Configure the button code with:
-
-```text
-SIRI_MIC_BUTTON_MASK=0x10
-```
-
-## Known limitation: Microphone button after sleep
-
-The Microphone/Siri button is not a completely reliable first button after the
-remote has disconnected or gone to sleep. The press can wake the remote before
-ATT notifications have been enabled, in which case the daemon cannot see which
-button caused the wake-up and no battery overlay appears. The button can also
-start the remote's Siri voice mode, which may reset the Bluetooth ATT connection.
-
-This happens because the Microphone button is not only an ordinary HID button on
-the first-generation Siri Remote. It also activates the remote's voice/audio path.
-The userspace daemon handles the HID reports over raw ATT, but it does not
-implement Apple's Siri audio protocol. When the remote is asleep, the daemon must
-first reconnect, subscribe to handle `0x0024`, and activate input with `0xAF` on
-handle `0x001d`. The wake-up press may already be over before those steps finish.
-If the remote proceeds into voice mode, it can close the existing ATT transport.
-
-While the daemon reconnects, subsequent buttons can appear unresponsive. A normal
-button may need to be pressed a second time after the connection becomes ready.
-For predictable battery display, first wake the remote with an ordinary button
-and press Microphone after it has connected. Home remains reserved exclusively
-for the three-second shutdown action.
-
-An automatic forced disconnect through BlueZ is deliberately not used as a
-workaround. Testing showed that this can race with the daemon's raw ATT reconnect:
-BlueZ may then own the connection while the daemon remains at `Connecting`, which
-causes much longer delays for every button. The stable behavior is therefore to
-let the normal reconnect loop recover without forcibly resetting BlueZ.
+The Microphone/Siri button is intentionally ignored. On this first-generation
+remote it also starts Apple's voice/audio path, which can reset the raw ATT
+connection because this userspace daemon implements HID input but not Apple's
+Siri audio protocol. There is deliberately no manual battery-display command on
+any button. Automatic low-battery monitoring and its warnings remain active.
 
 ## Troubleshooting
 

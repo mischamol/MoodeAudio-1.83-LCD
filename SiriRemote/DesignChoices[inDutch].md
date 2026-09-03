@@ -51,7 +51,7 @@ bluetoothctl trust 70:48:0F:F2:65:99
 | `00 02` | Volume + | `set_volume -up 5` |
 | `00 04` | Volume - | `set_volume -dn 5` |
 | `00 08` | Play/Pause | `toggle_play_pause` |
-| `00 10` | Microfoon/Siri | toon batterijpercentage |
+| `00 10` | Microfoon/Siri | genegeerd |
 | `00 20` | Menu/Back | wissel Playback en de laatste Library-view |
 | touchpad links + fysieke click | Vorige nummer | `previous` |
 | touchpad rechts + fysieke click | Volgende nummer | `next` |
@@ -68,9 +68,8 @@ sudo systemctl restart siri-remote-moode
 
 Standaard worden gewone remote-commando's genegeerd zolang moOde een externe
 renderer als actief meldt, waaronder AirPlay, Spotify Connect en Bluetooth.
-Dit geldt voor Play/Pause, Volume, Previous/Next, Menu/Back en optionele gewone
-knopkoppelingen. De microfoonknop blijft het batterijpercentage tonen en Home
-blijft na drie seconden de Pi uitschakelen. Ook de automatische batterijcontrole
+Dit geldt voor Play/Pause, Volume, Previous/Next, Menu/Back en optionele
+gewone knopkoppelingen. Home blijft na drie seconden de Pi uitschakelen. Ook de automatische batterijcontrole
 blijft actief. Een geblokkeerde knop toont één seconde `Disabled:` met daaronder
 de actieve renderernaam, zonder de bediening of een volgende snelle knopdruk op
 te houden. Ondersteund zijn Bluetooth, AirPlay, Spotify, Deezer, Squeezelite,
@@ -93,7 +92,7 @@ gebruikt standaard `3096` als midden en negeert een smalle zone van 60 eenheden
 aan beide kanten van het midden. Dit is instelbaar met `SIRI_TOUCH_X_SPLIT`,
 `SIRI_TOUCH_DEAD_ZONE` en `SIRI_TOUCH_MAX_AGE_SECONDS`.
 
-De Menu/Back-knop wisselt via de al aanwezige X11-bibliotheken tussen Playback
+Een Menu/Back-druk wisselt direct via de al aanwezige X11-bibliotheken tussen Playback
 en de Library-view waar Playback werkelijk vandaan kwam. Voor iedere druk leest
 het script moOde's actuele `current_view`; het gebruikt dus geen interne gok die
 verouderd raakt als het scherm handmatig wordt bediend. Vanuit `playback,album`
@@ -108,9 +107,10 @@ moOde-bestanden toegevoegd.
 De Home/TV-knop voert bij kort indrukken niets uit. Alleen onafgebroken drie
 seconden vasthouden voert `/usr/bin/systemctl poweroff` uit. De knopcode en duur zijn instelbaar met
 `SIRI_HOME_BUTTON_MASK` en `SIRI_HOME_HOLD_SECONDS`.
-De Microfoon/Siri-knop toont bij een gewone klik direct de laatst gemeten
-batterijwaarde in dezelfde batterijoverlay. De knopcode is instelbaar met
-`SIRI_MIC_BUTTON_MASK`.
+De Microfoon/Siri-knop wordt volledig genegeerd, omdat die op deze generatie ook
+Apples voice/audio-pad activeert en daarmee de raw ATT-verbinding kan resetten.
+Er is bewust geen handmatige batterijopvraag aan een knop gekoppeld. De
+automatische controle en waarschuwingen bij een laag percentage blijven actief.
 
 ## Schermoverlay
 
@@ -138,7 +138,8 @@ De standaardduur is één seconde en is instelbaar met
 `SIRI_OVERLAY_SECONDS`; zet `SIRI_OVERLAY=no` om de overlay uit te schakelen.
 De nep-transparante achtergrond wordt met de reeds aanwezige X11-, Cairo- en
 Lato-componenten opgebouwd. De antraciete cirkel gebruikt 60% dekking en
-behoudt 40% van het vastgelegde scherm. Labels in normale letterdikte en vette
+behoudt 40% van het vastgelegde scherm. Een dunne, gedeeltelijk transparante
+witte rand scheidt de cirkel van de coverart. Labels in normale letterdikte en vette
 hoofdwaarden volgen de visuele hiërarchie van
 moOde. Op het geteste 720 x 1280-portretscherm valt het middelpunt van de
 overlay exact samen met het middelpunt van de coverart. Na het verbergen krijgt

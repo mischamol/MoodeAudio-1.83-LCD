@@ -153,6 +153,7 @@ class ButtonMapperTests(unittest.TestCase):
             remote.HANDLE_INPUT_VALUE,
             bytes((0, remote.BUTTON_MENU)),
         )
+        self.assertEqual(clicker.clicks, 1)
         mapper.notification(
             remote.HANDLE_INPUT_VALUE,
             bytes((0, remote.BUTTON_MENU)),
@@ -197,18 +198,16 @@ class ButtonMapperTests(unittest.TestCase):
         self.assertIn("shutdown", overlay.cancellations)
         mapper.reset()
 
-    def test_microphone_click_shows_cached_battery(self):
-        shown = []
+    def test_microphone_button_is_completely_ignored(self):
         mapper = remote.ButtonMapper(
             self.worker,
             shutdown_action=lambda: None,
-            battery_display_action=lambda: shown.append(True),
         )
         mapper.notification(
             remote.HANDLE_INPUT_VALUE,
-            bytes((0, mapper.mic_mask)),
+            bytes((0, remote.BUTTON_SIRI)),
         )
-        self.assertEqual(shown, [True])
+        mapper.notification(remote.HANDLE_INPUT_VALUE, bytes((0, 0)))
         self.assertEqual(self.worker.actions, [])
         mapper.reset()
 
@@ -367,6 +366,8 @@ class X11OverlayTests(unittest.TestCase):
         self.assertEqual(remote.X11Overlay.MOODE_GREY, 0x303030)
         self.assertEqual(remote.X11Overlay.MOODE_TEXT, (240 / 255.0,) * 3)
         self.assertEqual(remote.X11Overlay.OVERLAY_OPACITY, 0.60)
+        self.assertEqual(remote.X11Overlay.OVERLAY_BORDER_OPACITY, 0.38)
+        self.assertEqual(remote.X11Overlay.OVERLAY_BORDER_WIDTH, 0.004)
         self.assertEqual(remote.X11Overlay.REPAINT_SETTLE_SECONDS, 0.05)
         self.assertEqual(remote.X11Overlay.COVER_CENTER_Y_RATIO, 0.284375)
 
@@ -517,22 +518,6 @@ class BatteryMonitorTests(unittest.TestCase):
         self.assertFalse(monitor.update(101))
         self.assertEqual(overlay.submissions, [])
         self.assertEqual(overlay.sequences, [])
-
-    def test_battery_click_displays_cached_percentage(self):
-        overlay = FakeOverlayWorker()
-        monitor = remote.BatteryMonitor(overlay, threshold=10)
-        monitor.update(80)
-        monitor.show_current()
-        self.assertEqual(overlay.submissions[-1][0], "BATTERY:80%")
-
-    def test_early_battery_click_is_shown_after_initial_read(self):
-        overlay = FakeOverlayWorker()
-        monitor = remote.BatteryMonitor(overlay, threshold=10)
-        monitor.show_current()
-        self.assertEqual(overlay.submissions, [])
-        monitor.update(83)
-        self.assertEqual(overlay.submissions[-1][0], "BATTERY:83%")
-
 
 class RawAttClientTests(unittest.TestCase):
     def test_battery_interval_tracks_latest_att_reading(self):
