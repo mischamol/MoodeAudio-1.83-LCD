@@ -51,7 +51,8 @@ sed -i "s|^SIRI_XAUTHORITY=/home/[^/]*/.Xauthority$|SIRI_XAUTHORITY=$display_hom
 sed -i '/^SIRI_MENU_CLICK_X=/d; /^SIRI_MENU_CLICK_Y=/d' /etc/default/siri-remote-moode
 sed -i 's/^SIRI_ATT_MTU=104$/SIRI_ATT_MTU=23/' /etc/default/siri-remote-moode
 grep -q '^SIRI_ATT_MTU=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_ATT_MTU=23' >> /etc/default/siri-remote-moode
-grep -q '^SIRI_CONNECT_TIMEOUT_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_CONNECT_TIMEOUT_SECONDS=2' >> /etc/default/siri-remote-moode
+sed -i 's/^SIRI_CONNECT_TIMEOUT_SECONDS=2$/SIRI_CONNECT_TIMEOUT_SECONDS=4/' /etc/default/siri-remote-moode
+grep -q '^SIRI_CONNECT_TIMEOUT_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_CONNECT_TIMEOUT_SECONDS=4' >> /etc/default/siri-remote-moode
 sed -i 's/^SIRI_KEEPALIVE_SECONDS=.*/SIRI_KEEPALIVE_SECONDS=0/' /etc/default/siri-remote-moode
 grep -q '^SIRI_KEEPALIVE_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_KEEPALIVE_SECONDS=0' >> /etc/default/siri-remote-moode
 sed -i 's/^SIRI_BATTERY_CHECK_SECONDS=300$/SIRI_BATTERY_CHECK_SECONDS=900/' /etc/default/siri-remote-moode

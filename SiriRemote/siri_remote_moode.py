@@ -206,7 +206,7 @@ class RawAttClient:
         mac: str,
         address_type: str,
         security: str,
-        connect_timeout: float = 2.0,
+        connect_timeout: float = 4.0,
     ) -> None:
         self.mac = mac
         self.address_type = {
@@ -2171,7 +2171,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--connect-timeout",
         type=float,
-        default=float(env("SIRI_CONNECT_TIMEOUT_SECONDS", "2")),
+        default=float(env("SIRI_CONNECT_TIMEOUT_SECONDS", "4")),
         help="maximum seconds for one Bluetooth connection attempt",
     )
     parser.add_argument(

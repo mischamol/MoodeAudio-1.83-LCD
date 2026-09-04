@@ -465,11 +465,11 @@ any button. Automatic low-battery monitoring and its warnings remain active.
 
 The remote may be asleep and not advertising. Press a button while the log
 shows `Connecting to Siri Remote ...`. Each connection attempt is bounded by
-`SIRI_CONNECT_TIMEOUT_SECONDS` (two seconds by default), followed by at most
+`SIRI_CONNECT_TIMEOUT_SECONDS` (four seconds by default), followed by at most
 one second of reconnect backoff. This prevents a sleeping remote from trapping
-one kernel connect call for tens of seconds or longer. In the tested setup, a
-sleeping remote woke, connected, executed Volume+, and queued its overlay in
-about 1.36 seconds.
+one kernel connect call for tens of seconds or longer. In two tested wake-up
+cycles, a sleeping remote connected, executed Volume+, and queued its overlay
+in approximately 1.36–2.55 seconds without requiring a second button press.
 
 ### Device or resource busy
 
@@ -514,7 +514,7 @@ the existing Bluetooth bond.
 
 After connecting, the daemon uses a blocking Bluetooth socket with explicit
 `select()` polling. Only connection setup is temporarily non-blocking so its
-two-second deadline can be enforced. At idle, CPU usage should be close to zero:
+four-second deadline can be enforced. At idle, CPU usage should be close to zero:
 
 ```sh
 ps -p "$(systemctl show siri-remote-moode -p MainPID --value)" -o pid,pcpu,cmd

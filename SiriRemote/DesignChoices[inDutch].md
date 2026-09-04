@@ -252,7 +252,7 @@ BlueZ-configuratie niet.
 - HTTP in een aparte worker, zodat een trage moOde-response geen Bluetooth
   notifications blokkeert.
 - Alleen het opzetten van de Bluetooth-verbinding is niet-blokkerend en wordt
-  na standaard twee seconden afgebroken. Zo kan een slapende remote niet één
+  na standaard vier seconden afgebroken. Zo kan een slapende remote niet één
   kernel-connectiepoging tientallen seconden of langer blokkeren. Eenmaal
   verbonden gebruikt de daemon een blokkerende socket met expliciete
   `select()`-polling; dit voorkomt de CPU-spin die Python socket-time-outs op
