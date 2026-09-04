@@ -23,6 +23,8 @@ grep -q '^MOODE_PREVIOUS_CMD=' /etc/default/siri-remote-moode || printf '%s\n' '
 grep -q '^MOODE_NEXT_CMD=' /etc/default/siri-remote-moode || printf '%s\n' 'MOODE_NEXT_CMD=next' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_IGNORE_DURING_RENDERER=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_IGNORE_DURING_RENDERER=yes' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_RENDERER_CACHE_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_RENDERER_CACHE_SECONDS=0.25' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_RENDERER_DIRECT_DB=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_RENDERER_DIRECT_DB=yes' >> /etc/default/siri-remote-moode
+grep -q '^MOODE_DB_PATH=' /etc/default/siri-remote-moode || printf '%s\n' 'MOODE_DB_PATH=/var/local/www/db/moode-sqlite3.db' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_TOUCH_X_SPLIT=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_TOUCH_X_SPLIT=3096' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_TOUCH_DEAD_ZONE=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_TOUCH_DEAD_ZONE=60' >> /etc/default/siri-remote-moode
 grep -q '^SIRI_TOUCH_MAX_AGE_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_TOUCH_MAX_AGE_SECONDS=1.5' >> /etc/default/siri-remote-moode
@@ -49,6 +51,7 @@ sed -i "s|^SIRI_XAUTHORITY=/home/[^/]*/.Xauthority$|SIRI_XAUTHORITY=$display_hom
 sed -i '/^SIRI_MENU_CLICK_X=/d; /^SIRI_MENU_CLICK_Y=/d' /etc/default/siri-remote-moode
 sed -i 's/^SIRI_ATT_MTU=104$/SIRI_ATT_MTU=23/' /etc/default/siri-remote-moode
 grep -q '^SIRI_ATT_MTU=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_ATT_MTU=23' >> /etc/default/siri-remote-moode
+grep -q '^SIRI_CONNECT_TIMEOUT_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_CONNECT_TIMEOUT_SECONDS=2' >> /etc/default/siri-remote-moode
 sed -i 's/^SIRI_KEEPALIVE_SECONDS=.*/SIRI_KEEPALIVE_SECONDS=0/' /etc/default/siri-remote-moode
 grep -q '^SIRI_KEEPALIVE_SECONDS=' /etc/default/siri-remote-moode || printf '%s\n' 'SIRI_KEEPALIVE_SECONDS=0' >> /etc/default/siri-remote-moode
 sed -i 's/^SIRI_BATTERY_CHECK_SECONDS=300$/SIRI_BATTERY_CHECK_SECONDS=900/' /etc/default/siri-remote-moode

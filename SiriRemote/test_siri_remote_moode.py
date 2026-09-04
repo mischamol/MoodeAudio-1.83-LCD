@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import os
+import sqlite3
+import tempfile
 import unittest
 from unittest import mock
 
@@ -249,6 +251,43 @@ class RendererGuardTests(unittest.TestCase):
             self.assertTrue(guard.allows("Play/Pause"))
         self.assertEqual(blocked, [])
 
+    def test_direct_database_read_returns_active_renderers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "moode.db")
+            connection = sqlite3.connect(path)
+            try:
+                connection.execute(
+                    "CREATE TABLE cfg_system "
+                    "(id INTEGER PRIMARY KEY, param CHAR(32), value CHAR(32))"
+                )
+                connection.executemany(
+                    "INSERT INTO cfg_system (param, value) VALUES (?, ?)",
+                    [
+                        (flag, "1" if flag in ("aplactive", "spotactive") else "0")
+                        for flag in remote.RendererGuard.ACTIVE_FLAGS
+                    ],
+                )
+                connection.commit()
+            finally:
+                connection.close()
+            with mock.patch.dict(
+                os.environ, {"MOODE_DB_PATH": path}, clear=False,
+            ):
+                guard = remote.RendererGuard("http://localhost/command/", 4)
+            self.assertEqual(
+                guard._read_database(), ("aplactive", "spotactive"),
+            )
+
+    def test_direct_database_failure_falls_back_to_http(self):
+        guard = remote.RendererGuard("http://localhost/command/", 4)
+        with mock.patch.object(
+            guard, "_read_database", side_effect=sqlite3.OperationalError("busy"),
+        ), mock.patch.object(
+            guard, "_read_http", return_value=("rxactive",),
+        ) as read_http:
+            self.assertEqual(guard.check(), ("rxactive",))
+        read_http.assert_called_once_with()
+
 
 class MoodeWorkerTests(unittest.TestCase):
     def test_active_renderer_prevents_http_request(self):
@@ -365,11 +404,14 @@ class X11OverlayTests(unittest.TestCase):
     def test_overlay_colors_match_moode_defaults(self):
         self.assertEqual(remote.X11Overlay.MOODE_GREY, 0x303030)
         self.assertEqual(remote.X11Overlay.MOODE_TEXT, (240 / 255.0,) * 3)
-        self.assertEqual(remote.X11Overlay.OVERLAY_OPACITY, 0.60)
-        self.assertEqual(remote.X11Overlay.OVERLAY_BORDER_OPACITY, 0.38)
+        self.assertEqual(remote.X11Overlay.OVERLAY_OPACITY, 0.36)
+        self.assertEqual(remote.X11Overlay.OVERLAY_BORDER_OPACITY, 0.48)
         self.assertEqual(remote.X11Overlay.OVERLAY_BORDER_WIDTH, 0.004)
+        self.assertEqual(remote.X11Overlay.GLASS_BLUR_DOWNSAMPLE, 8)
+        self.assertEqual(remote.X11Overlay.GLASS_HIGHLIGHT_OPACITY, 0.16)
+        self.assertEqual(remote.X11Overlay.GLASS_SHADOW_OPACITY, 0.18)
         self.assertEqual(remote.X11Overlay.REPAINT_SETTLE_SECONDS, 0.05)
-        self.assertEqual(remote.X11Overlay.COVER_CENTER_Y_RATIO, 0.284375)
+        self.assertEqual(remote.X11Overlay.COVER_CENTER_Y_RATIO, 0.29375)
 
     def test_shutdown_ring_position_is_shared_by_countdown_and_final_frame(self):
         self.assertEqual(remote.X11Overlay.SHUTDOWN_LABEL_CENTER_Y, 0.30)
@@ -377,9 +419,9 @@ class X11OverlayTests(unittest.TestCase):
 
     def test_overlay_is_centered_inside_portrait_cover(self):
         size, left, top = remote.X11Overlay._overlay_geometry(720, 1280)
-        self.assertEqual((size, left, top), (536, 92, 96))
+        self.assertEqual((size, left, top), (536, 92, 108))
         self.assertEqual(left + size // 2, 360)
-        self.assertEqual(top + size // 2, 364)
+        self.assertEqual(top + size // 2, 376)
 
     def test_play_is_a_vector_symbol(self):
         self.assertEqual(

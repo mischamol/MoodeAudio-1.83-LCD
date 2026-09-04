@@ -18,6 +18,7 @@ import select
 import shlex
 import signal
 import socket
+import sqlite3
 import struct
 import subprocess
 import sys
@@ -200,13 +201,20 @@ def checked_call(libc: ctypes.CDLL, name: str, *args: object) -> int:
 
 
 class RawAttClient:
-    def __init__(self, mac: str, address_type: str, security: str) -> None:
+    def __init__(
+        self,
+        mac: str,
+        address_type: str,
+        security: str,
+        connect_timeout: float = 2.0,
+    ) -> None:
         self.mac = mac
         self.address_type = {
             "public": BDADDR_LE_PUBLIC,
             "random": BDADDR_LE_RANDOM,
         }[address_type]
         self.security_level = {"low": 1, "medium": 2, "high": 3, "fips": 4}[security]
+        self.connect_timeout = connect_timeout
         self.sock: socket.socket | None = None
         self.notification_handler = None
         self.battery_handler = None
@@ -215,6 +223,7 @@ class RawAttClient:
     def connect(self) -> None:
         libc = ctypes.CDLL(None, use_errno=True)
         fd = checked_call(libc, "socket", AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP)
+        pending_socket: socket.socket | None = None
         try:
             security = BtSecurity(self.security_level, 0)
             checked_call(
@@ -229,14 +238,50 @@ class RawAttClient:
             local = sockaddr(None, BDADDR_LE_PUBLIC)
             checked_call(libc, "bind", fd, ctypes.byref(local), ctypes.sizeof(local))
             remote = sockaddr(self.mac, self.address_type)
-            checked_call(libc, "connect", fd, ctypes.byref(remote), ctypes.sizeof(remote))
-            self.sock = socket.socket(fileno=fd)
+            # A blocking Bluetooth connect can remain inside the kernel for
+            # minutes while a sleeping remote is not advertising. Limit only
+            # this connection phase; the established ATT socket is switched
+            # back to blocking mode to avoid the SOCK_SEQPACKET CPU-spin seen
+            # with Python's receive timeouts on recent kernels.
+            os.set_blocking(fd, False)
+            result = libc.connect(fd, ctypes.byref(remote), ctypes.sizeof(remote))
+            connect_error = ctypes.get_errno() if result < 0 else 0
+            pending_socket = socket.socket(fileno=fd)
             fd = -1
+            if result < 0:
+                if connect_error not in (
+                    errno.EINPROGRESS,
+                    errno.EAGAIN,
+                    errno.EWOULDBLOCK,
+                ):
+                    raise OSError(connect_error, os.strerror(connect_error))
+                _, writable, exceptional = select.select(
+                    [], [pending_socket], [pending_socket], self.connect_timeout,
+                )
+                if exceptional:
+                    raise ConnectionError(
+                        "Bluetooth ATT connect entered an exceptional state"
+                    )
+                if not writable:
+                    raise socket.timeout(
+                        f"Bluetooth ATT connect timed out after "
+                        f"{self.connect_timeout:g}s"
+                    )
+                connect_error = pending_socket.getsockopt(
+                    socket.SOL_SOCKET, socket.SO_ERROR,
+                )
+                if connect_error:
+                    raise OSError(connect_error, os.strerror(connect_error))
+            pending_socket.setblocking(True)
+            self.sock = pending_socket
+            pending_socket = None
             # Keep Bluetooth SOCK_SEQPACKET blocking. On some recent kernels,
             # Python's settimeout() non-blocking emulation returns immediately
             # for this socket type and creates a 100% CPU spin loop.
             self.sock.setblocking(True)
         finally:
+            if pending_socket is not None:
+                pending_socket.close()
             if fd >= 0:
                 libc.close(fd)
 
@@ -449,6 +494,12 @@ class RendererGuard:
         if self.cache_seconds < 0:
             raise ValueError("SIRI_RENDERER_CACHE_SECONDS cannot be negative")
         self.timeout = min(2.0, timeout)
+        self.db_path = env(
+            "MOODE_DB_PATH", "/var/local/www/db/moode-sqlite3.db",
+        )
+        self.direct_db = env("SIRI_RENDERER_DIRECT_DB", "yes").lower() in (
+            "1", "yes", "true", "on",
+        )
         self.url = urllib.parse.urljoin(
             command_url,
             "cfg-table.php?cmd=get_cfg_system",
@@ -463,6 +514,36 @@ class RendererGuard:
             raise ValueError("invalid get_cfg_system response")
         return tuple(flag for flag in cls.ACTIVE_FLAGS if str(data.get(flag, "0")) == "1")
 
+    def _read_database(self) -> tuple[str, ...]:
+        placeholders = ",".join("?" for _ in self.ACTIVE_FLAGS)
+        uri = f"file:{self.db_path}?mode=ro"
+        connection = sqlite3.connect(uri, uri=True, timeout=0.2)
+        try:
+            rows = connection.execute(
+                f"SELECT param, value FROM cfg_system "
+                f"WHERE param IN ({placeholders})",
+                self.ACTIVE_FLAGS,
+            ).fetchall()
+        finally:
+            connection.close()
+        data = dict(rows)
+        missing = set(self.ACTIVE_FLAGS) - data.keys()
+        if missing:
+            raise ValueError(
+                "renderer flags missing from cfg_system: "
+                + ", ".join(sorted(missing))
+            )
+        return self.active_renderers(data)
+
+    def _read_http(self) -> tuple[str, ...]:
+        request = urllib.request.Request(
+            self.url,
+            headers={"User-Agent": "siri-remote-moode/1", "Connection": "close"},
+        )
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            data = json.loads(response.read(262144).decode("utf-8"))
+        return self.active_renderers(data)
+
     def check(self) -> tuple[str, ...] | None:
         """Return active flags, empty when inactive, or None on status failure."""
         if not self.enabled:
@@ -471,15 +552,19 @@ class RendererGuard:
             now = time.monotonic()
             if now - self.last_check <= self.cache_seconds and self.last_result is not None:
                 return self.last_result
-            request = urllib.request.Request(
-                self.url,
-                headers={"User-Agent": "siri-remote-moode/1", "Connection": "close"},
-            )
             try:
-                with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                    data = json.loads(response.read(262144).decode("utf-8"))
-                result = self.active_renderers(data)
-            except (OSError, ValueError, urllib.error.URLError) as exc:
+                if self.direct_db:
+                    try:
+                        result = self._read_database()
+                    except (OSError, ValueError, sqlite3.Error) as exc:
+                        LOG.warning(
+                            "Direct renderer-state read failed; using HTTP: %s",
+                            exc,
+                        )
+                        result = self._read_http()
+                else:
+                    result = self._read_http()
+            except (OSError, ValueError, sqlite3.Error, urllib.error.URLError) as exc:
                 LOG.error("Cannot determine renderer state; ignoring remote action: %s", exc)
                 self.last_check = now
                 self.last_result = None
@@ -757,14 +842,19 @@ class X11Overlay:
     ZPIXMAP = 2
     MOODE_GREY = 0x303030
     MOODE_TEXT = (240 / 255.0, 240 / 255.0, 240 / 255.0)
-    OVERLAY_OPACITY = 0.60
-    OVERLAY_BORDER_OPACITY = 0.38
+    OVERLAY_OPACITY = 0.36
+    OVERLAY_BORDER_OPACITY = 0.48
     OVERLAY_BORDER_WIDTH = 0.004
+    GLASS_BLUR_DOWNSAMPLE = 8
+    GLASS_HIGHLIGHT_OPACITY = 0.16
+    GLASS_SHADOW_OPACITY = 0.18
     REPAINT_SETTLE_SECONDS = 0.05
-    COVER_CENTER_Y_RATIO = 0.284375
+    COVER_CENTER_Y_RATIO = 0.29375
     SHUTDOWN_LABEL_CENTER_Y = 0.30
     SHUTDOWN_RING_CENTER_Y = 0.64
     SYMBOLS = {"PLAY", "PAUSE", "NEXT", "PREVIOUS", "BATTERY"}
+    _x11_library: ctypes.CDLL | None = None
+    _cairo_library: ctypes.CDLL | None = None
     FONT_5X7 = {
         " ": ("00000",) * 7,
         "0": ("01110", "10001", "10011", "10101", "11001", "10001", "01110"),
@@ -799,8 +889,10 @@ class X11Overlay:
         self.display_name = env("SIRI_X_DISPLAY", ":0")
         self.xauthority = env("SIRI_XAUTHORITY", "/home/pi/.Xauthority")
 
-    @staticmethod
-    def _load_x11() -> ctypes.CDLL:
+    @classmethod
+    def _load_x11(cls) -> ctypes.CDLL:
+        if cls._x11_library is not None:
+            return cls._x11_library
         x11 = ctypes.CDLL("libX11.so.6")
         x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
         x11.XOpenDisplay.restype = ctypes.c_void_p
@@ -858,10 +950,13 @@ class X11Overlay:
         x11.XFreeGC.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
         x11.XDestroyImage.argtypes = [ctypes.c_void_p]
         x11.XDestroyWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        cls._x11_library = x11
         return x11
 
-    @staticmethod
-    def _load_cairo() -> ctypes.CDLL:
+    @classmethod
+    def _load_cairo(cls) -> ctypes.CDLL:
+        if cls._cairo_library is not None:
+            return cls._cairo_library
         cairo = ctypes.CDLL("libcairo.so.2")
         cairo.cairo_xlib_surface_create.argtypes = [
             ctypes.c_void_p, ctypes.c_ulong, ctypes.c_void_p,
@@ -908,7 +1003,97 @@ class X11Overlay:
         ]
         cairo.cairo_set_line_width.argtypes = [ctypes.c_void_p, ctypes.c_double]
         cairo.cairo_stroke.argtypes = [ctypes.c_void_p]
+        cairo.cairo_save.argtypes = [ctypes.c_void_p]
+        cairo.cairo_restore.argtypes = [ctypes.c_void_p]
+        cairo.cairo_clip.argtypes = [ctypes.c_void_p]
+        cairo.cairo_scale.argtypes = [
+            ctypes.c_void_p, ctypes.c_double, ctypes.c_double,
+        ]
+        cairo.cairo_set_source_surface.argtypes = [
+            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_double, ctypes.c_double,
+        ]
+        cairo.cairo_paint.argtypes = [ctypes.c_void_p]
+        cairo.cairo_get_source.argtypes = [ctypes.c_void_p]
+        cairo.cairo_get_source.restype = ctypes.c_void_p
+        cairo.cairo_pattern_set_filter.argtypes = [
+            ctypes.c_void_p, ctypes.c_int,
+        ]
+        cairo.cairo_pattern_create_linear.argtypes = [
+            ctypes.c_double, ctypes.c_double, ctypes.c_double, ctypes.c_double,
+        ]
+        cairo.cairo_pattern_create_linear.restype = ctypes.c_void_p
+        cairo.cairo_pattern_add_color_stop_rgba.argtypes = [
+            ctypes.c_void_p, ctypes.c_double, ctypes.c_double,
+            ctypes.c_double, ctypes.c_double, ctypes.c_double,
+        ]
+        cairo.cairo_set_source.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        cairo.cairo_pattern_destroy.argtypes = [ctypes.c_void_p]
+        cls._cairo_library = cairo
         return cairo
+
+    def warm_up(self) -> None:
+        """Prime X11, Cairo, scaling and the Lato font without showing a window."""
+        os.environ["DISPLAY"] = self.display_name
+        os.environ["XAUTHORITY"] = self.xauthority
+        x11 = self._load_x11()
+        display = x11.XOpenDisplay(self.display_name.encode())
+        if not display:
+            raise RuntimeError(
+                f"cannot open X display {self.display_name} using {self.xauthority}"
+            )
+        x11.XCloseDisplay(display)
+
+        cairo = self._load_cairo()
+        size = 64
+        stride = size * 4
+        data = ctypes.create_string_buffer(stride * size)
+        surface = cairo.cairo_image_surface_create_for_data(
+            ctypes.cast(data, ctypes.c_void_p), 1, size, size, stride,
+        )
+        if not surface:
+            raise RuntimeError("could not create warm-up Cairo surface")
+        context = cairo.cairo_create(surface)
+        if not context:
+            cairo.cairo_surface_destroy(surface)
+            raise RuntimeError("could not create warm-up Cairo context")
+        small_surface = None
+        small_context = None
+        try:
+            cairo.cairo_select_font_face(context, b"Lato", 0, 1)
+            cairo.cairo_set_font_size(context, 24.0)
+            cairo.cairo_move_to(context, 4.0, 32.0)
+            cairo.cairo_show_text(context, b"60%")
+
+            # Exercise the same scale/filter path used by the glass blur.
+            small_size = 8
+            small_stride = small_size * 4
+            small_data = ctypes.create_string_buffer(
+                small_stride * small_size
+            )
+            small_surface = cairo.cairo_image_surface_create_for_data(
+                ctypes.cast(small_data, ctypes.c_void_p),
+                1, small_size, small_size, small_stride,
+            )
+            if small_surface:
+                small_context = cairo.cairo_create(small_surface)
+            if small_context:
+                cairo.cairo_scale(small_context, 0.125, 0.125)
+                cairo.cairo_set_source_surface(
+                    small_context, surface, 0.0, 0.0,
+                )
+                cairo.cairo_pattern_set_filter(
+                    cairo.cairo_get_source(small_context), 2,
+                )
+                cairo.cairo_paint(small_context)
+                cairo.cairo_surface_flush(small_surface)
+            cairo.cairo_surface_flush(surface)
+        finally:
+            if small_context:
+                cairo.cairo_destroy(small_context)
+            if small_surface:
+                cairo.cairo_surface_destroy(small_surface)
+            cairo.cairo_destroy(context)
+            cairo.cairo_surface_destroy(surface)
 
     @staticmethod
     def _make_input_transparent(display: int, window: int) -> None:
@@ -1081,6 +1266,18 @@ class X11Overlay:
                 0.0, 6.283185307179586,
             )
             cairo.cairo_stroke(context)
+            # A restrained specular arc suggests curved glass without making
+            # the outline look doubled or detached from moOde's styling.
+            cairo.cairo_set_source_rgba(
+                context, *cls.MOODE_TEXT, cls.GLASS_HIGHLIGHT_OPACITY,
+            )
+            cairo.cairo_set_line_width(context, size * 0.007)
+            cairo.cairo_new_path(context)
+            cairo.cairo_arc(
+                context, size * 0.50, size * 0.50, size * 0.468,
+                3.55, 5.25,
+            )
+            cairo.cairo_stroke(context)
             cairo.cairo_set_source_rgb(context, *cls.MOODE_TEXT)
             if text == "PLAY":
                 polygon([
@@ -1198,7 +1395,7 @@ class X11Overlay:
 
     @classmethod
     def _tint_image(cls, image: int, size: int) -> None:
-        """Blend the fake-alpha circle in native Cairo instead of a slow pixel loop."""
+        """Turn the captured background into a non-composited glass circle."""
         ximage = ctypes.cast(image, ctypes.POINTER(XImage)).contents
         native_rgb24 = (
             ximage.data
@@ -1213,9 +1410,58 @@ class X11Overlay:
                 ximage.data, 1, size, size, ximage.bytes_per_line,
             )
             if surface:
+                small_surface = None
+                small_context = None
                 context = cairo.cairo_create(surface)
                 if context:
                     try:
+                        # Downscale and enlarge a captured copy. Bilinear
+                        # interpolation produces a fast frosted-glass blur and
+                        # never touches the live X11 window or command worker.
+                        small_size = max(36, size // cls.GLASS_BLUR_DOWNSAMPLE)
+                        small_stride = small_size * 4
+                        small_data = ctypes.create_string_buffer(
+                            small_stride * small_size
+                        )
+                        small_surface = cairo.cairo_image_surface_create_for_data(
+                            ctypes.cast(small_data, ctypes.c_void_p),
+                            1, small_size, small_size, small_stride,
+                        )
+                        if small_surface:
+                            small_context = cairo.cairo_create(small_surface)
+                        if small_context:
+                            scale_down = small_size / size
+                            cairo.cairo_scale(
+                                small_context, scale_down, scale_down,
+                            )
+                            cairo.cairo_set_source_surface(
+                                small_context, surface, 0.0, 0.0,
+                            )
+                            cairo.cairo_pattern_set_filter(
+                                cairo.cairo_get_source(small_context), 2,
+                            )
+                            cairo.cairo_paint(small_context)
+                            cairo.cairo_surface_flush(small_surface)
+
+                            cairo.cairo_save(context)
+                            cairo.cairo_new_path(context)
+                            cairo.cairo_arc(
+                                context, (size - 1) / 2.0,
+                                (size - 1) / 2.0, size * 0.485,
+                                0.0, 6.283185307179586,
+                            )
+                            cairo.cairo_clip(context)
+                            scale_up = size / small_size
+                            cairo.cairo_scale(context, scale_up, scale_up)
+                            cairo.cairo_set_source_surface(
+                                context, small_surface, 0.0, 0.0,
+                            )
+                            cairo.cairo_pattern_set_filter(
+                                cairo.cairo_get_source(context), 4,
+                            )
+                            cairo.cairo_paint(context)
+                            cairo.cairo_restore(context)
+
                         channel = ((cls.MOODE_GREY >> 16) & 0xFF) / 255.0
                         cairo.cairo_set_source_rgba(
                             context, channel, channel, channel,
@@ -1227,9 +1473,40 @@ class X11Overlay:
                             size * 0.485, 0.0, 6.283185307179586,
                         )
                         cairo.cairo_fill(context)
+
+                        # Soft diagonal illumination: milky at the upper-left,
+                        # neutral through the center, shaded at the lower-right.
+                        glass = cairo.cairo_pattern_create_linear(
+                            0.0, 0.0, float(size), float(size),
+                        )
+                        if glass:
+                            cairo.cairo_pattern_add_color_stop_rgba(
+                                glass, 0.0, 1.0, 1.0, 1.0,
+                                cls.GLASS_HIGHLIGHT_OPACITY,
+                            )
+                            cairo.cairo_pattern_add_color_stop_rgba(
+                                glass, 0.48, 1.0, 1.0, 1.0, 0.025,
+                            )
+                            cairo.cairo_pattern_add_color_stop_rgba(
+                                glass, 1.0, 0.0, 0.0, 0.0,
+                                cls.GLASS_SHADOW_OPACITY,
+                            )
+                            cairo.cairo_set_source(context, glass)
+                            cairo.cairo_new_path(context)
+                            cairo.cairo_arc(
+                                context, (size - 1) / 2.0,
+                                (size - 1) / 2.0, size * 0.485,
+                                0.0, 6.283185307179586,
+                            )
+                            cairo.cairo_fill(context)
+                            cairo.cairo_pattern_destroy(glass)
                         cairo.cairo_surface_flush(surface)
                         return
                     finally:
+                        if small_context:
+                            cairo.cairo_destroy(small_context)
+                        if small_surface:
+                            cairo.cairo_surface_destroy(small_surface)
                         cairo.cairo_destroy(context)
                         cairo.cairo_surface_destroy(surface)
                 cairo.cairo_surface_destroy(surface)
@@ -1401,6 +1678,7 @@ class OverlayWorker:
     ) -> None:
         if not self.enabled or not frames:
             return
+        LOG.debug("Overlay queued: kind=%s frames=%s", kind, frames)
         with self.condition:
             # There is deliberately no FIFO. The newest remote event replaces
             # both queued and visible content, which keeps rapid volume clicks
@@ -1460,6 +1738,12 @@ class OverlayWorker:
                 self.submit("PAUSE")
 
     def _run(self) -> None:
+        try:
+            self.overlay.warm_up()
+            LOG.debug("X11 overlay warm-up complete")
+        except (AttributeError, OSError, RuntimeError) as exc:
+            # A temporarily unavailable display must not disable later overlays.
+            LOG.warning("X11 overlay warm-up skipped: %s", exc)
         while True:
             with self.condition:
                 while self.latest is None and not self.stopping:
@@ -1471,7 +1755,9 @@ class OverlayWorker:
                 self.active_kind = kind
                 self.interrupt.clear()
             try:
+                LOG.debug("Overlay drawing: kind=%s frames=%s", kind, frames)
                 self.overlay.show_sequence(frames, self.interrupt)
+                LOG.debug("Overlay drawing finished: kind=%s", kind)
             except (OSError, RuntimeError) as exc:
                 LOG.error("X11 overlay failed: %s", exc)
             finally:
@@ -1806,7 +2092,12 @@ def run(args: argparse.Namespace) -> int:
     delay = args.reconnect_min
     try:
         while not stop_event.is_set():
-            client = RawAttClient(args.mac, args.address_type, args.security)
+            client = RawAttClient(
+                args.mac,
+                args.address_type,
+                args.security,
+                args.connect_timeout,
+            )
             att_busy = False
             client.notification_handler = mapper.notification
             client.battery_handler = battery_monitor.update
@@ -1878,6 +2169,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--http-timeout", type=float, default=float(env("MOODE_HTTP_TIMEOUT", "4")))
     parser.add_argument("--mtu", type=int, default=int(env("SIRI_ATT_MTU", "23")))
     parser.add_argument(
+        "--connect-timeout",
+        type=float,
+        default=float(env("SIRI_CONNECT_TIMEOUT_SECONDS", "2")),
+        help="maximum seconds for one Bluetooth connection attempt",
+    )
+    parser.add_argument(
         "--keepalive",
         type=float,
         default=float(env("SIRI_KEEPALIVE_SECONDS", "0")),
@@ -1930,6 +2227,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("reconnect delays must satisfy 0 < min <= max")
     if not 23 <= args.mtu <= 517:
         parser.error("MTU must be between 23 and 517")
+    if args.connect_timeout <= 0:
+        parser.error("connect timeout must be greater than zero")
     if args.keepalive < 0:
         parser.error("keepalive interval cannot be negative")
     if args.battery_check < 0:

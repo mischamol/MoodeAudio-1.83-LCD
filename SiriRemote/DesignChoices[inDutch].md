@@ -76,14 +76,19 @@ te houden. Ondersteund zijn Bluetooth, AirPlay, Spotify, Deezer, Squeezelite,
 Plexamp, RoonBridge, Audio Input en Multiroom Receiver. Die laatste naam wordt
 over twee regels verdeeld.
 
-De daemon leest de bestaande moOde-status alleen wanneer een gewone knopactie
-binnenkomt en bewaart die maximaal 0,25 seconde. Er draait dus geen extra
-renderer-polling. Als de status niet gelezen kan worden, wordt de gewone actie
-voor de zekerheid genegeerd. Instellingen:
+Voor een gewone knopactie leest de daemon de rendererflags rechtstreeks en
+alleen-lezen uit moOde's SQLite-database. Daarmee vervalt ongeveer 0,2–0,3
+seconde PHP/HTTP-vertraging per knopdruk. Als de database niet beschikbaar is,
+valt de code automatisch terug op het bestaande alleen-lezen HTTP-endpoint. De
+uitkomst wordt maximaal 0,25 seconde bewaard; er draait geen extra polling. Als
+beide controles mislukken, wordt de gewone actie voor de zekerheid genegeerd.
+Instellingen:
 
 ```text
 SIRI_IGNORE_DURING_RENDERER=yes
 SIRI_RENDERER_CACHE_SECONDS=0.25
+SIRI_RENDERER_DIRECT_DB=yes
+MOODE_DB_PATH=/var/local/www/db/moode-sqlite3.db
 ```
 
 Alleen een fysieke click op het touchpad geeft een opdracht; aanraken en vegen
@@ -137,14 +142,19 @@ volgende interval gekozen. Er zijn geen parallelle ATT-reads.
 De standaardduur is één seconde en is instelbaar met
 `SIRI_OVERLAY_SECONDS`; zet `SIRI_OVERLAY=no` om de overlay uit te schakelen.
 De nep-transparante achtergrond wordt met de reeds aanwezige X11-, Cairo- en
-Lato-componenten opgebouwd. De antraciete cirkel gebruikt 60% dekking en
-behoudt 40% van het vastgelegde scherm. Een dunne, gedeeltelijk transparante
-witte rand scheidt de cirkel van de coverart. Labels in normale letterdikte en vette
+Lato-componenten opgebouwd. Binnen de cirkel wordt de vastgelegde cover eerst
+verkleind en weer vergroot voor een snelle frosted-glassvervaging. Een antraciete
+tint van 36% en een subtiele diagonale licht- en schaduwlaag vormen het glas;
+een dunne, gedeeltelijk transparante witte rand scheidt de cirkel van de
+coverart. Labels in normale letterdikte en vette
 hoofdwaarden volgen de visuele hiërarchie van
 moOde. Op het geteste 720 x 1280-portretscherm valt het middelpunt van de
 overlay exact samen met het middelpunt van de coverart. Na het verbergen krijgt
 Chromium kort tijd om de achtergrond opnieuw te
 tekenen, zodat een oude overlay niet onder de volgende melding blijft staan.
+Bij het starten warmt de overlayworker X11, Cairo, het Lato-lettertype en het
+glasschalingspad onzichtbaar op. Dit is gereed voordat de afstandsbediening klaar
+is en voorkomt dat juist de eerste echte overlay merkbaar later verschijnt.
 Het laatste power-symbool bij shutdown gebruikt
 exact dezelfde positie en grootte als tijdens het aftellen. Er worden geen
 moOde-bestanden gewijzigd.
@@ -241,8 +251,12 @@ BlueZ-configuratie niet.
   behandeld.
 - HTTP in een aparte worker, zodat een trage moOde-response geen Bluetooth
   notifications blokkeert.
-- Een blokkerende Bluetooth-socket met expliciete `select()`-polling voorkomt
-  de CPU-spin die Python socket-timeouts op sommige recente kernels geven.
+- Alleen het opzetten van de Bluetooth-verbinding is niet-blokkerend en wordt
+  na standaard twee seconden afgebroken. Zo kan een slapende remote niet één
+  kernel-connectiepoging tientallen seconden of langer blokkeren. Eenmaal
+  verbonden gebruikt de daemon een blokkerende socket met expliciete
+  `select()`-polling; dit voorkomt de CPU-spin die Python socket-time-outs op
+  sommige recente kernels geven.
 - Deze remote gebruikt aantoonbaar MTU 23. Batterij-keepalive is uitgeschakeld,
   omdat dit de verbinding niet betrouwbaarder maakte. Bij een bezette CID 4 vraagt de daemon BlueZ
   automatisch de verbinding los te laten voordat hij opnieuw probeert.

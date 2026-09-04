@@ -202,14 +202,19 @@ non-blocking latest-wins overlay. The display names are Bluetooth, AirPlay,
 Spotify, Deezer, Squeezelite, Plexamp, RoonBridge, Audio Input, and Multiroom
 Receiver; the final name is split across two lines.
 
-The daemon checks the read-only moOde status endpoint only when an ordinary
-remote action arrives and caches it for 0.25 seconds. It does not continuously
-poll renderer state. A failed status read blocks the ordinary action rather
-than risking control of the external stream. Configure this with:
+Before an ordinary action, the daemon reads the renderer flags directly and
+read-only from moOde's SQLite database. This avoids roughly 0.2–0.3 seconds of
+PHP/HTTP latency on every button press. It automatically falls back to the
+existing read-only HTTP endpoint if the database is unavailable, and caches the
+result for 0.25 seconds. It does not continuously poll renderer state. If both
+checks fail, the ordinary action is blocked rather than risking control of an
+external stream. Configure this with:
 
 ```text
 SIRI_IGNORE_DURING_RENDERER=yes
 SIRI_RENDERER_CACHE_SECONDS=0.25
+SIRI_RENDERER_DIRECT_DB=yes
+MOODE_DB_PATH=/var/local/www/db/moode-sqlite3.db
 ```
 
 ## 5. Download the software from GitHub
@@ -355,9 +360,11 @@ configuration file and modifies no moOde WebUI file.
 
 The daemon uses the X11, Cairo, and Lato components already present on moOde to
 show a one-second circular overlay. It does not install a compositor or another
-package and does not modify moOde files. The anthracite circle uses 60% opacity
-and retains 40% of the captured screen, keeping the background clearly visible.
-A thin, partially transparent white outline separates it from the cover art.
+package and does not modify moOde files. The captured cover art is softly
+downsampled and enlarged inside the circle to create a fast frosted-glass blur.
+A 36% anthracite tint, restrained diagonal highlight and shadow, and thin
+partially transparent white rim create the liquid-glass appearance while keeping
+the background and text legible.
 Regular-weight labels and bold primary values match the visual hierarchy of
 the moOde interface. On the tested 720 x 1280 portrait display, the overlay
 center is aligned exactly with the cover-art center.
@@ -382,6 +389,10 @@ later. After hiding an overlay, the worker briefly allows Chromium to repaint
 before another background capture, preventing old overlay content from being
 captured underneath the next notification. Configure or disable this feature
 in `/etc/default/siri-remote-moode`:
+
+At daemon startup, the display worker invisibly warms up X11, Cairo, the Lato
+font, and the glass scaling path. This completes before the remote is ready and
+prevents the first real overlay after startup from appearing noticeably later.
 
 ```text
 SIRI_OVERLAY=yes
@@ -453,8 +464,12 @@ any button. Automatic low-battery monitoring and its warnings remain active.
 ### Connection timed out
 
 The remote may be asleep and not advertising. Press a button while the log
-shows `Connecting to Siri Remote ...`. The next reconnect attempt may take up
-to 30 seconds.
+shows `Connecting to Siri Remote ...`. Each connection attempt is bounded by
+`SIRI_CONNECT_TIMEOUT_SECONDS` (two seconds by default), followed by at most
+one second of reconnect backoff. This prevents a sleeping remote from trapping
+one kernel connect call for tens of seconds or longer. In the tested setup, a
+sleeping remote woke, connected, executed Volume+, and queued its overlay in
+about 1.36 seconds.
 
 ### Device or resource busy
 
@@ -497,8 +512,9 @@ the existing Bluetooth bond.
 
 ### Check CPU usage
 
-The fixed daemon uses a blocking Bluetooth socket with explicit `select()`
-polling. At idle, CPU usage should be close to zero:
+After connecting, the daemon uses a blocking Bluetooth socket with explicit
+`select()` polling. Only connection setup is temporarily non-blocking so its
+two-second deadline can be enforced. At idle, CPU usage should be close to zero:
 
 ```sh
 ps -p "$(systemctl show siri-remote-moode -p MainPID --value)" -o pid,pcpu,cmd
